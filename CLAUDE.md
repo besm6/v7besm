@@ -61,9 +61,10 @@ cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a
 stack**, where a long function costs 1.5–2 words per source line before any array.
 `cmd/README.md` §6 is the account.
 
-**The root image has 91 free blocks of 2000**, and the test pack 1,686 of its own. **Take the
-number from a build** — `b6fsutil` prints it on every `root.img` — rather than from this
-sentence, which has drifted before. Budget more than the program: a directory it needs is a
+**The root image has 870 free blocks of 2000**, the `/usr` pack 1,186 and the test pack 1,686.
+**Take the number from a build** — `b6fsutil` prints it on every image — rather than from this
+sentence, which has drifted before. Which disk you are spending depends on the `DEST`: a
+`usr/…` path costs the `/usr` pack, everything else the root. Budget more than the program: a directory it needs is a
 block, a program past 6 blocks pays an indirect block too, a data file can dwarf the program
 (`calendar` is 42 blocks, 29 of them the database), and an edit to a file already on the image
 can cross 3072 bytes and cost a block that looked free. `cmd/README.md` §7 is the account.
@@ -101,18 +102,33 @@ having no `O_CREAT` and no `O_EXCL`.
 `build/rootfs/` is staged only, never installed, and also carries
 `/lib/{crt0.o,libc.a,libruntime.a}`, `/usr/include` and `/usr/man` through the top-level
 `CMakeLists.txt`'s `B6_STAGE_*` lists (`/usr/man` is 205 pages). **`scripts/root.manifest`**
-describes the image; paths resolve against `b6fsutil`'s working directory
-(`build/kernel/test`), and modes (seven setuid) and the four hard links (`/bin/[` → `/bin/test`,
-`/bin/less` → `/bin/more`, `egrep.1`/`fgrep.1` → `grep.1`) live there rather than in the staging
-tree.
+describes the root image; paths resolve against `b6fsutil`'s working directory
+(`build/kernel/test`), and modes (seven setuid) and the hard links (`/bin/[` → `/bin/test`,
+`/bin/less` → `/bin/more`) live there rather than in the staging tree.
 
-**There are two disks.** `build/testfs/` is the second staging tree and **`scripts/test.manifest`**
-the second manifest: the `lib/test` programs, which were `/usr/test` on the root until the
-**test pack** existed and are now `/test/*` on `test3077.disk`. Nothing mounts it
-automatically — `/etc/rc` has no line for it, deliberately — so a dialogue that wants them
-types `/etc/mount /dev/md1 /mnt -r` and reads them as `/mnt/test/*`. It is attached `-r` and
-mounted `-r`, so one shared copy serves every test; only `kernel/test/core` uses it, and that
-is the tree's only live caller of `smount()`.
+**There are three disks**, one staging tree short of three, because `build/rootfs/` feeds two
+of them.
+
+**`scripts/usr.manifest`** is the second: the manual, the headers, the toolchain and
+`/usr/lib` as `usr3100.disk`, 788 blocks that were on the root until it existed. **The pack's
+root is what mounts at `/usr`**, so `/usr/bin/cpp` is spelled `/bin/cpp` there, and
+`egrep.1`/`fgrep.1` → `grep.1` is its three-way link. `/etc/rc` fscks `/dev/rmd1` and mounts
+`/dev/md1` on `/usr` **read-write** — `/usr/spool/at` and `/usr/spool/mail` are written at run
+time — so `multi` converts a copy of its own at volume 3101, as it already does for the root.
+It is staged out of `build/rootfs/usr`, the root's own tree, which is why nothing moved for the
+split and why `usrimg` depends on `rootfs`; the price is that `build/rootfs/` no longer holds
+exactly what `root.img` holds.
+
+**`scripts/test.manifest`** is the third, and the only one with a staging tree to itself
+(`build/testfs/`): the `lib/test` programs, which were `/usr/test` on the root until the **test
+pack** existed and are now `/test/*` on `test3077.disk`. Nothing mounts it automatically —
+`/etc/rc` has no line for it, deliberately — so a dialogue that wants them types
+`/etc/mount /dev/md7 /mnt -r` and reads them as `/mnt/test/*`. It is attached `-r` and mounted
+`-r`, so one shared copy serves every test; only `kernel/test/core` uses it.
+
+**Drives**: `md0` root, `md1` `/usr`, `md2` and `md3` reserved for a future `/tmp` and `/home`,
+`md7` the test pack. All eight have raw twins (`/dev/rmd0`…`/dev/rmd7`); `rmd4`–`rmd6` are the
+unassigned ones, and are what a manual page should name when it wants scratch.
 
 **Porting v7 userland**: read `cmd/README.md`, the twelve-point recipe. `b6parse` is **strict
 C11** — no implicit `int`, no K&R parameter lists — but what bites is that v7 assumes `int` and
@@ -156,8 +172,8 @@ copy.
   still reaches a shell prompt; `multi`, which types `^D` at that prompt and goes on into
   multi-user mode — `/etc/rc` and the `/etc/update` daemon it leaves running, a getty per line
   of `/etc/ttys`, `crypt(3)`, and root on `/dev/console` with guest on `/dev/tty1` at the same
-  instant; and `core`, which mounts the
-  test pack and runs `/mnt/test/coret`. `multi` is also the worked example for typing at the
+  instant, plus the `/etc/rc` `fsck` of the `/usr` pack and the `mount` that follows it; and
+  `core`, which mounts the test pack and runs `/mnt/test/coret`. `multi` is also the worked example for typing at the
   guest and for driving the second Consul, which needs the host program
   `kernel/test/ttyhost.c`. When a README claims `fsck` repairing a pack, the swapper under
   pressure or the self-hosting `cc` run is covered, it describes one of the eighteen booting

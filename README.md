@@ -77,8 +77,9 @@ is the program above, ready to build.
   handle UTF-8, so Cyrillic prints correctly.
 - **The kernel.** Memory management, processes, signals, pipes, swapping, shared program text,
   the v7 system calls. It runs on real simulated hardware — MMU, drums, disks, the console.
-- **A filesystem you can look after.** `mkfs` makes one on a second drive, `mount` attaches
-  it, `fsck` repairs a damaged one, `tar` archives the tree, `df` and `du` measure it.
+- **Filesystems you can look after.** `/usr` is a volume of its own, checked with `fsck` and
+  mounted by `/etc/rc` at every boot into multi-user mode; `mkfs` makes another on a spare
+  drive, `mount` attaches it, `tar` archives a tree, `df` and `du` measure it.
 - **112 programs.** The shell and its scripts, the file commands, two dozen text filters
   (`grep`, `sed`, `awk`, `sort`, `diff`, `tr`, …), two editors — `ed` and the full-screen
   `novi` — the calculators (`bc`, `dc`, `units`, `expr`), `make`, `m4` and `crypt`, the

@@ -70,11 +70,13 @@ majors here (`cdevsw[3]` against `bdevsw[0]`) and their device numbers say nothi
 other. Given a block name, `df` opens the **raw twin** — `/dev/md1` through `/dev/rmd1` — so
 that a bare `df` still takes the path the four conditions below are about.
 
-**The fallback to the block device is load-bearing and has a live case.**
-`kernel/test/mount.sh` runs `df /dev/md3`, and [../../scripts/root.manifest](../../scripts/root.manifest)
-stages `rmd0` and `rmd1` and no other raw node. That one falls back, and a block read goes
-through `readi()` and the buffer cache, where none of the four conditions bind. Staging
-`/dev/rmd2`…`rmd7` for one test would have been the worse trade.
+**The fallback to the block device is still load-bearing, but it no longer has a live case on
+this image.** It used to: [../../scripts/root.manifest](../../scripts/root.manifest) staged
+`rmd0` and `rmd1` and no other raw node, so `df /dev/md3` fell back and a block read went
+through `readi()` and the buffer cache, where none of the four conditions bind. The manifest
+now stages `rmd0`…`rmd7` — the `/usr` pack needed `rmd1` named for `/etc/rc`'s `fsck`, and
+completing the set cost six inodes and no blocks — so every block node has its twin and
+nothing on the image takes the fallback. The path stays, for a node made by hand with `mknod`.
 
 ### `mtab.c` is compiled a third time, and *when* it runs is the trap
 

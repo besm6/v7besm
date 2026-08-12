@@ -1,5 +1,7 @@
 # /etc/rc -- the boot script, run by /etc/init as sh /etc/rc.
 
+/etc/fsck -y /dev/rmd1 >/dev/console 2>&1
+/etc/mount /dev/md1 /usr >/dev/console 2>&1
 date >/dev/console
 /etc/update
 /etc/cron
@@ -53,22 +55,28 @@ date >/dev/console
 # that root.manifest does not have.  So that line of the v7 rc is gone rather
 # than pending.
 #
-# MOUNT IS NO LONGER ONE OF THEM AND STILL GETS NO LINE.  Task C4f put
-# /etc/mount and /etc/umount on the image, but a boot image has nothing to
-# mount: one EC-5052 drive is the whole of the store, /usr is a directory of
-# the root rather than a volume of its own, and swap lives on the drums.  The
-# second and third drives exist only in kernel/test/mount, which attaches them
-# itself.  A mount line here would fail on every real boot.
+# THE FSCK AND MOUNT LINES ARE /usr's, and they are the two newest here: /usr is
+# a pack of its own now (scripts/usr.manifest) rather than a directory of the
+# root, so a boot into multi-user mode has something to mount at last.
 #
-# FSCK IS THE EXCEPTION, and it is C4d's one loose end: /etc/fsck exists now and
-# `/etc/fsck -y /dev/rmd0 >/dev/console' would be the v7 line.  It is not here
-# for the same reason the rm below is not -- a line in this file has exactly one
-# home for its assertion, kernel/test/console, which is DISABLED (kernel task
-# 35).  Note also that a fsck which REPAIRS the mounted root does not return:
-# it prints BOOT UNIX (NO SYNC!) and spins, deliberately, because the kernel's
-# in-core superblock would otherwise undo the repair.  So whoever adds the line
-# adds it knowing that a damaged root stops the boot dead, which is what it is
-# supposed to do and is not what an unattended test wants.
+# THE ORDER IS FIXED THREE TIMES OVER.  fsck before mount, or the kernel's
+# in-core superblock would undo the repair -- and it is safe here only because
+# the pack is UNMOUNTED at that point: fsck.c sets hotroot for rootdev alone, so
+# `/dev/rmd1' repairs and returns, where a fsck of the mounted root prints
+# BOOT UNIX (NO SYNC!) and spins deliberately.  That is also why the root itself
+# still gets no fsck line.  Mount before /etc/cron, which reads
+# /usr/lib/crontab.  And both before `date', because kernel/test/multi matches
+# the date's tail against the login prompt that follows it, and anything printed
+# between the two would break that -- which is the assertion these lines have.
+#
+# 2>&1 ON BOTH IS NOT DECORATION: runcom() gives this script fds 0/1/2 on the
+# root DIRECTORY (cmd/init/init.c), so an unredirected diagnostic goes nowhere.
+#
+# AN UNATTACHED /usr DOES NOT STOP THE BOOT.  mdopen() takes any minor below 64
+# and the refusal comes at the first transfer, so both lines print a failure and
+# the boot carries on -- with no cc, man, calendar, bc, units, diff -h, at, lex
+# or yacc, all of which live on the pack.  Single-user mode is in that state by
+# construction, which is v7's behaviour too.
 #
 # rm left that list with task C1b, and so did cp, ln and mv -- but the only
 # line of the v7 rc that used rm cleared /tmp of an editor's leftovers, and

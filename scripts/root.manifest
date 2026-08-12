@@ -1,91 +1,14 @@
-# The root filesystem the kernel mounts -- what `b6fsutil -n -M' builds into root.img,
-# which `-S' then converts into the SIMH container kernel/test/CMakeLists.txt attaches as
-# md00.  Grammar: cmd/fsutil/README.md.
+# The root filesystem: what `b6fsutil -n -M' builds into root.img and `-S' converts into
+# root3072.disk, attached as md00.  Grammar: cmd/fsutil/README.md.
 #
-# The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh, the five commands that
-# prove the prompt, the ten of the file-management set and the eight small utilities of task
-# C2, plus the static files of /etc.
-# Task 24 put them here and task 25b
-# flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
-# added /usr/test, the lib/test programs that b6sim also runs, and the termcap and curses
-# ports added three more beside them; ALL OF THAT HAS SINCE LEFT for a filesystem of its own
-# (test.manifest), leaving /etc/termcap, which they read and which stays here.
-# Task C1a (cmd/README.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
-# to carry a mode the staging tree cannot express: they are SETUID ROOT.  Task C1b added
-# /bin/{cp,ln,mv,rm} and a third setuid program in mv, and task C1c added
-# /bin/{chgrp,chmod,chown,touch} -- the four that change an inode rather than a directory,
-# and the four that finished the file-management set.  None of THOSE is setuid: chmod(2) is
-# gated on owner(), which admits the file's owner, and chown(2) on suser(), which is the rule
-# that stops a user giving a file away.  Task C2a added /bin/{date,kill,sleep} -- the clock, a
-# signal and an alarm -- and task C2b /bin/{basename,test,time,tty,yes}, none of them setuid
-# either, together with THE FIRST HARD LINK this file has ever carried: /bin/[ is /bin/test.
-# Kernel task 29b added the three entries that make this a MULTI-USER image: /etc/getty,
-# /bin/login and the /etc/ttys that sends init looking for them -- plus a home for guest, the
-# first directory here that is not root's.  That home began as /usr/guest and is /home/guest
-# now: /usr is a directory of the root on this image rather than the separate volume v7 hung
-# accounts off, so people live under a /home of their own.  Task C25b added /usr/man -- two
-# hundred manual pages in five section directories, the largest single addition this file has
-# ever taken, and the whole of the manual in the dialect doc/Manual_Page_Format.md describes --
-# together with the /usr/bin/man that finds them, and task C25a the /usr/bin/manview that
-# formats one.
+# `source' resolves against b6fsutil's working directory, build/kernel/test, so
+# ../../rootfs is the staging tree cmd/ and etc/ fill.
 #
-# WHY THIS FILE LIVES IN scripts/ and not in kernel/test/ beside the CMakeLists
-# that runs b6fsutil over it: every `file' below but none of the directories comes out of
-# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/getty, cmd/login,
-# cmd/{basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,
-# sync,test,time,touch,tty,yes}, lib/test and etc/ -- and by the TOP-LEVEL CMakeLists.txt
-# itself, which stages the three trees no one directory owns: /lib, /usr/include and
-# /usr/man.  The one exception is /bin/[, which comes out of no directory at all: it is a `link'
-# stanza and its inode is /bin/test's.
-# The image is the whole project's, and it is the top-level CMakeLists.txt that draws the
-# `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
+# /usr is a MOUNT POINT, not a directory: its contents are on a pack of their own
+# (scripts/usr.manifest), which /etc/rc fscks and mounts on /dev/md1.
 #
-# WHAT DOES NOT MOVE WITH IT is b6fsutil's working directory: it is still the kernel test
-# BUILD directory, because that is where root.img and root3072.disk have to land for the
-# .ini files to attach them.  A `source' is resolved against THE PROCESS'S CWD, not against
-# this file's own location, so moving the manifest changed no path below.  From
-# build/kernel/test/, `../../rootfs' is build/rootfs/, and that holds for any build
-# directory, since both ends are under CMAKE_BINARY_DIR.
-#
-# CONSEQUENCE: this manifest depends on the top-level project.  A standalone
-# `cmake -S kernel' can still build and boot the kernel, but it cannot build root.img,
-# because nothing there stages a build/rootfs/ for these paths to point at.
-#
-# NOTHING WRITES THIS IMAGE IN PLACE.  root.img and root3072.disk are build artifacts, and a
-# test that needs a writable filesystem converts its own copy at its own volume number first
-# -- kernel/test/run-multi.sh and run-core.sh both do.  The same tool's `-a' is how a test can
-# get a guest script onto the image without a line here, and how coninit can be put back as
-# /etc/init by hand when a console failure needs bisecting against a program that links
-# neither crt0 nor libc.
-#
-# Four tests read this image: fstest, which checks the superblock and the root inode below the
-# boot path, and boot, multi and core, which boot a kernel against it -- boot read-only at
-# volume 3072, the other two off writable copies at 3085 and 3086.  The second filesystem is
-# test.manifest's and is a separate matter.
-#
-# THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
-# row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 rmd, 4 rmb).
-# A node here that names a row conf.c does not have opens onto nothing.  Major 0 is the
-# only one with more than one minor that matters: dev/sc.c drives BOTH Consul typewriters,
-# minor 0 being the operator's and minor 1 the second terminal.
-#
-# For the disk, the MINOR IS THE SIMULATOR'S UNIT SUBSCRIPT -- bit 5 the controller, bits
-# 4-3 the group (линейка), bits 2-0 the drive -- so /dev/md0's minor 0 is SIMH's md00, and
-# a minor number and an `attach' line are the same number.  There are no partitions: one
-# EC-5052 drive is 2000 blocks and swap lives on the drums (/dev/swap, block major 1).
-#
-# SINCE TASK C4c THERE ARE TWO DRIVES' WORTH OF NODES, md0/rmd0 and md1/rmd1, and md1 is now
-# the one with a standing job: the test pack (test.manifest) is attached there and mounted
-# on /mnt.  The raw twin is what /etc/mkfs writes a filesystem onto.  A node for a drive nobody
-# attached is not an error -- mdopen() accepts any minor below 64 and the refusal comes at the
-# first transfer -- so neither costs anything on a boot that attaches only md00.
-#
-# AND SINCE NMOUNT WENT FROM 2 TO 8 THERE ARE EIGHT, md0 through md7.  The kernel can hold
-# eight mounts and iinit() takes one for the root, so seven filesystems can be on this
-# machine at once; without the nodes to name them that is capacity nothing can reach, and
-# `mknod' on a running system does not survive the image being rebuilt.  md3-md7 carry no
-# raw node, for md2's reason: nothing has ever wanted the raw form of a drive that exists
-# only to be mounted, and /dev/rmdN is the whole of a pack to whoever can open it.
+# The dependency list is ROOTFS_FILES in kernel/test/CMakeLists.txt; adding a file means
+# editing both.
 
 default
 owner 0
@@ -96,2614 +19,468 @@ filemode 0644
 dir /bin
 dir /dev
 dir /etc
-dir /usr
-
-# THE TOOLCHAIN.  It began as one program -- /usr/bin/cpp, the C preprocessor, the first
-# thing on this disk built from THE SAME SOURCES AS A HOST TOOL (task C9a in cmd/README.md)
-# -- and tasks C9b through C9e finished it: eleven programs now, from the preprocessor to
-# the cc(1) driver that runs them.  The shell's default path is already ":/bin:/usr/bin"
-# (cmd/sh/msg.c), so a bare `cc' finds it without /etc/rc setting PATH at all.
-dir /usr/bin
-
-# THE OTHER TWO THIRDS OF A DEVELOPMENT SYSTEM, task C9e, and they are here because
-# /usr/bin/cc's link line names them: without /lib there is no crt0.o and no libc.a to
-# link against, and cc could only ever be run -nostdlib.  /usr/include is what a `cc -E'
-# resolves a system header from.  Both are staged by the top-level CMakeLists.txt (the
-# B6_STAGE_* lists), and kernel/test/CMakeLists.txt hangs root.img on the same lists so
-# that a file staged and not listed cannot go unnoticed.
-#
-# THE HEADER TREE HAS TWO OWNERS, which is the one thing to know before adding to it: the
-# hosted half is this repo's include/ and is staged from the SOURCE tree, so an edit is on
-# the image without an install; the freestanding ten -- <stddef.h>, <stdarg.h>, <besm6.h>
-# and their fellows -- belong to the external c-compiler, which defines them, and are
-# copied from where it installed them.  include/README.md has the division.
+dir /usr                # mount point; the pack is scripts/usr.manifest
 dir /lib
-dir /usr/include
-dir /usr/include/sys
-
-# diff -h's other half, task C5f.  THE FIRST ENTRY THIS IMAGE HAS EVER HAD IN /usr/lib, and
-# the only program of that task that is not in /bin: diff(1) reaches it with
-# execv("/usr/lib/diffh", args), so the path here and the string in cmd/diff/diff.c are one
-# and have to stay so.  It is diff's way out of memory -- diff holds both files in core and
-# says `files too big, try -h' when they will not fit, which on a 28,672-word address space
-# is nearer than it was on a PDP-11 (cmd/diff/README.md).
-dir /usr/lib
-
-# calendar(1)'s database, task C23, and PLURAL because /usr/lib/calendar is already the
-# program that prints the pattern.  Twenty-nine blocks, the largest single body of data on
-# this image after the manual: /usr/bin/calendar greps these when the current directory has
-# no `calendar' of its own, which is the one thing it does that v7's did not.
-dir /usr/lib/calendars
-
-# look(1)'s default dictionary.  v7's /usr/dict/words is not in this tree -- the
-# reference copy under cmd/tmp/ is git-ignored -- so cmd/look/words is a small sorted
-# list written for the purpose, staged by cmd/look/CMakeLists.txt.  It is what makes the
-# bare `look word' form mean anything here, and it is the ONE assertion about look that
-# b6sim cannot make: under the simulator this path is the build machine's (SS9), so every
-# case in cmd/look/test names its dictionary explicitly and kernel/test/filters is where
-# the default is exercised.
-dir /usr/dict
-
-# THE MANUAL, in v7's own layout: the section DIGIT picks the directory and the subsection
-# letter stays on the FILE, so fsck(1M)'s page is man1/fsck.1m and stdio(3S)'s is
-# man3/stdio.3s.  man4, man6 and man7 are absent because this tree has no device, game or
-# macro pages; the nine sections it does have are 1, 1m, 2, 3, 3s, 3m, 3x, 5 and 8.  The
-# pages themselves are far below, with the /usr/include ones.
-dir /usr/man
-dir /usr/man/man1
-dir /usr/man/man2
-dir /usr/man/man3
-dir /usr/man/man5
-dir /usr/man/man8
-
 dir /tmp
 mode 0777
-
-# fsck(1M)'s reconnect target, task C4d.  An orphaned inode -- allocated, with nothing in
-# any directory pointing at it -- is put here under its i-number, and fsck can only do that
-# if the directory ALREADY EXISTS: it has no way to make one, having no free-list
-# discipline of its own to allocate with.
-#
-# AN EMPTY ONE IS ENOUGH, which fsck.1m denies.  That page says to create files in it and
-# delete them again so that empty slots exist; here linkup() rounds the directory's size up
-# to a whole block, a block holds DIRPB (128) entries, and everything past `.' and `..' is
-# zeros -- alloc() clears the buffer it hands out (kernel/alloc.c) and b6fsutil's dir.cpp
-# starts from a zero Block.  So this has 126 free slots the moment it is made.  cmd/fsck's
-# manual page carries the correction.
 dir /lost+found
-
-# mount(1M)'s target, task C4f, and since the test pack arrived it has a tenant:
-# `/etc/mount /dev/md1 /mnt -r' puts the lib/test programs here as /mnt/test/* (test.manifest).
-# It has to exist and it has to be EMPTY of anything anybody wants: mounting covers it, and
-# whatever is underneath is unreachable until the unmount.  It also has to be nobody's working
-# directory when the mount happens -- smount() refuses a mount point whose inode is held more
-# than once (i_count != 1, kernel/sys3.c) with EBUSY.
 dir /mnt
-
-# WHERE PEOPLE LIVE.  login(1) chdir()s to the pw_dir field of /etc/passwd and prints
-# `No directory' if it cannot, so an account is only usable because its home exists -- and
-# guest's being uid 7's is what lets a non-root shell write in it.  That last property is what
-# put the cc demo below here rather than anywhere else.
-#
-# A TOP-LEVEL /home AND NOT ANOTHER /usr SUBDIRECTORY, which is where guest lived until now.
-# v7 put accounts under /usr because /usr WAS A SEPARATE VOLUME holding the system's second half
-# and everybody's account together; here it is a directory of the root like any other, so
-# nothing is gained by the crowding and /usr keeps only the system's half.  /home is root's and
-# 0755 -- a place to put homes, not a place anyone works -- and each home inside it is its
-# owner's.  guest is the only tenant, root's home being `/' and sys, bin and uucp being
-# pseudo-accounts whose pw_dir is a working directory rather than a home.
 dir /home
 dir /home/guest
 owner 7
 group 3
 
-file /home/guest/hello.S # cmd/cc/hello.S -- THE DEMO, and the only SOURCE FILE on this disk.
-                        # Task C9e put /usr/bin/cc here; this is the thing to point it at:
-                        #
-                        #       $ cc hello.S
-                        #       $ ./a.out
-                        #       Hello BESM-6!
-                        #
-                        # A capital `.S' on purpose -- it is what sends the file through cpp
-                        # before as, and the #include <sys/syscall.h> at its head is what
-                        # that is for -- so this one command is the longest chain the
-                        # machine can run, and the only one it can run end to end: a `.c'
-                        # cannot be compiled here at all.  It calls write(2) and exit(2)
-                        # through the $77 gate directly and takes nothing from libc, which
-                        # is why it is legible as a first program.  It is guest's own file
-                        # (uid 7, as the home is) because cc writes hello.o and a.out
-                        # into the CURRENT directory: a logged-in user builds it where it
-                        # sits.  cmd/cc/README.md, "The demo on the image".
+# ---- /home -----------------------------------------------------------------------
+
+file /home/guest/hello.S # cc(1) demo source, the only source file on this disk
 source ../../rootfs/home/guest/hello.S
 mode 0644
 owner 7
 group 3
 
-# THE FIRST SPOOL DIRECTORY THIS IMAGE HAS EVER HAD, task C21, and at(1)'s whole storage.
-# 0777 for the same reason /tmp is: at is NOT setuid, so an ordinary user creates the copy of
-# their own script here, owns it, and that ownership is how /usr/lib/atrun later recovers the
-# uid to run the job under.  `past' is 0777 too and not 0755 -- atrun's child unlinks the job
-# AFTER dropping to its owner, and unlink asks for write permission on the directory.
-#
-# NOTHING CREATES THESE AT RUN TIME.  at does not mkdir its spool and atrun does not either,
-# and neither does mail; all three simply fail without them, which is what makes them manifest
-# entries rather than a boot-time step.
-#
-# /usr/spool/mail ARRIVED WITH TASK C28 and is the exact converse of `at's argument above, which
-# is why it is 0755 and root's rather than 0777.  at is not setuid, so a user creates their own
-# spool file and the directory has to be writable by everyone; mail IS setuid root, so root
-# creates each mailbox and chown(2)s it to the recipient, and nobody needs write permission here
-# at all.  0755 also means a user cannot unlink somebody else's mailbox -- unlink asks for write
-# permission on the DIRECTORY, which is the same rule that made `past' 0777.  copyback() rewrites
-# a mailbox after mail has dropped privilege, but that truncates a file the caller already owns
-# and needs nothing from this directory.
-#
-# cmd/login has probed this path with access() since task C6 and found nothing every time; it is
-# what makes `You have mail.' reachable for the first time (cmd/login/login.c).
-dir /usr/spool
-dir /usr/spool/at
-mode 0777
-dir /usr/spool/at/past
-mode 0777
-dir /usr/spool/mail
+# ---- /etc -- the programs --------------------------------------------------------
 
-# ---- the program the icode execs, and the shell it will exec in turn -------------
-
-file /etc/init          # cmd/init: the v7 /etc/init
+file /etc/init          # process control initialization
 source ../../rootfs/etc/init
 mode 0755
 
-# /etc/getty and NOT /bin/getty: cmd/init/init.c's `char getty[] = "/etc/getty"' is the path
-# init execs, and nothing looks anywhere else.  It is the second program of task 29b, and the
-# one that makes /etc/ttys below mean something.  0755 and not setuid -- init is root and this
-# is its child.
-file /etc/getty         # cmd/getty: the login: prompt, one per enabled line of /etc/ttys
+file /etc/getty         # set typewriter mode and read a login name
 source ../../rootfs/etc/getty
 mode 0755
 
-# /etc AND NOT /bin, which is v7's placement and the reason the two `ls /bin' expectations
-# in kernel/test did not have to grow for this one.  quot is section 1M: it sweeps the whole
-# i-list off /dev/rmd0, so it needs root and is of no use to anybody else.  NOT setuid, for
-# the reason df is not -- see /bin/df above and cmd/df/README.md.
-file /etc/quot          # cmd/quot -- blocks per uid, by sweeping the i-list off /dev/rmd0
+file /etc/quot          # summarize file system ownership
 source ../../rootfs/etc/quot
 mode 0755
 
-# quot's placement, and quot's reasons: section 1M, root-only, NOT setuid.  This one is
-# sharper than the other two, though -- mkfs WRITES the raw device, and it is the first
-# program on this image that does.  A setuid mkfs would let anybody destroy every file on
-# the volume with one command.  cmd/mkfs/README.md is the account of that write path.
-file /etc/mkfs          # cmd/mkfs -- make a filesystem, on /dev/rmd1 and nothing else here
+file /etc/mkfs          # construct a file system
 source ../../rootfs/etc/mkfs
 mode 0755
 
-# quot's and mkfs's placement again, and the sharpest case of their reason: this one WRITES
-# other people's files.  /dev/rmd0 is mode 0600 because that node is every file's contents,
-# and a setuid fsck would hand the whole volume to anyone who could think of an i-number.
-# Not setuid; root-only; section 1M.
-file /etc/fsck          # cmd/fsck -- check a filesystem, and repair it
+file /etc/fsck          # file system consistency check and interactive repair
 source ../../rootfs/etc/fsck
 mode 0755
 
-# The four pre-fsck tools, task C4e -- each doing one of fsck's jobs standalone.  fsck's
-# placement and fsck's reasons, and two of them are the sharp case: clri WRITES an i-node
-# and `icheck -s' rewrites the free list of the whole volume, so a setuid one of either
-# would hand every file on the disk to anybody who could think of an i-number.  None of the
-# four is setuid; all four are root-only, and all four are section 1M.  Being in /etc is
-# also why the two hard-coded `ls /bin' expectations in kernel/test did not have to grow.
-file /etc/clri          # cmd/clri -- zero an i-node that appears in no directory
+file /etc/clri          # clear i-node
 source ../../rootfs/etc/clri
 mode 0755
 
-file /etc/dcheck        # cmd/dcheck -- directory entries against link counts
+file /etc/dcheck        # file system directory consistency check
 source ../../rootfs/etc/dcheck
 mode 0755
 
-file /etc/icheck        # cmd/icheck -- block accounting, and -s lays the free list down again
+file /etc/icheck        # file system storage consistency check
 source ../../rootfs/etc/icheck
 mode 0755
 
-file /etc/ncheck        # cmd/ncheck -- i-number to path name; `ncheck | sort | quot -n'
+file /etc/ncheck        # generate names from i-numbers
 source ../../rootfs/etc/ncheck
 mode 0755
 
-# The two inspection programs of task C8 that are section 1M, and so are in /etc where v7 put
-# them.  NEITHER IS ROOT-ONLY BY PERMISSION, unlike the nine above: iostat reads five values
-# through kctl(2), which is unprivileged, and pstat reads eleven the same way.  What IS
-# root-only is pstat -u, whose u-area comes off /dev/mem -- mode 0640 and root's -- so that
-# one flag fails for anybody else and the other seven do not.  IT IS NOW THE ONLY ROOT-ONLY
-# INSPECTION MODE LEFT: ps took KCTL_PSINFO and df took statfs(2), and neither reaches a
-# device any more.  Neither is setuid, and pstat must not become one: /dev/mem is every
-# process's memory, and a setuid pstat would hand it out through a program that already
-# knows the layout.
-file /etc/iostat        # cmd/iostat -- five of kernel/kctl.c's rows.  Three columns per
-                        # device out of the dk_time histogram, and the four CPU percentages,
-                        # each of them the sum of eight of its slots.
+file /etc/iostat        # report I/O statistics
 source ../../rootfs/etc/iostat
 mode 0755
 
-file /etc/pstat         # cmd/pstat -- eleven of kernel/kctl.c's rows name this program, and
-                        # -m, -s and -c are here because six of them named it for tables v7's
-                        # pstat never printed.  Only -u opens a device.
+file /etc/pstat         # print system facts
 source ../../rootfs/etc/pstat
 mode 0755
 
-# The pair of task C4f, and the one that finishes C4: they are what puts a second filesystem
-# behind /mnt below.  Section 1M and root-only for a reason that is not the other eight's --
-# these two do not touch the raw device at all.  What gates them is /dev/md1, mode 0600 and
-# root's, which is where mount(2) takes its privilege from: it asks for none of its own, so a
-# setuid mount would let anybody graft a filesystem of their own making -- setuid-root files
-# and all -- onto this one.  cmd/mount/README.md SS4.
-file /etc/mount         # cmd/mount -- mount a filesystem, on /dev/md1 through the buffer cache
+file /etc/mount         # mount and dismount file system
 source ../../rootfs/etc/mount
 mode 0755
 
-file /etc/umount        # cmd/umount -- and take it away again
+file /etc/umount        # dismount a file system
 source ../../rootfs/etc/umount
 mode 0755
 
-# /etc AND NOT /bin, which is v7's arrangement: wall's section is 1M and cmd/sh's default path
-# reaches /bin only, so it is typed with its path.  NOT setuid, and its own manual page is the
-# argument -- "the sender should be super-user to override any protections the users may have
-# invoked" is a statement about the ordinary permission check on a 0600 terminal, and a setuid
-# wall would hand that override to everybody.  cmd/write is the opposite case and is 0755 too,
-# for the opposite reason: it makes the mesg(1) check itself.
-file /etc/wall          # cmd/wall -- task C6.  One forked child per live /etc/utmp record
+file /etc/wall          # write to all users
 source ../../rootfs/etc/wall
 mode 0755
 
-# /etc AND NOT /bin for the same reason as init and getty above: nobody types this one either.
-# THE FIRST DAEMON ON THIS IMAGE -- /etc/rc starts it and it runs until the machine stops,
-# syncing the buffer cache every thirty seconds.  It is safe in a script init re-runs on every
-# pass through its loop because shutdown() runs first on every pass and kill(-1) spares only
-# process 0 and process 1; cmd/update/README.md is the argument, kernel/test/multi asks
-# `ps -ax' for it.  NOT setuid: sync(2) is ungated and init runs the script as root.
-file /etc/update        # cmd/update -- task C20.  The other half of /bin/sync: the flush
-                        # nobody has to type
+file /etc/update        # periodically update the super block
 source ../../rootfs/etc/update
 mode 0755
 
-# THE SECOND DAEMON, task C22, and the line that finishes /etc/rc's list of programs to wait
-# for.  It wakes every minute, re-reads /usr/lib/crontab below whenever that file's mtime has
-# moved, and hands each command whose five time fields match to /bin/sh.  It is safe in a
-# re-run script for the reason /etc/update above is, and kernel/test/multi asks `ps -ax' for
-# it the same way.
-#
-# IT DOES NOT setuid(1) AND v7's DID: the only live line of the crontab runs /usr/lib/atrun,
-# which needs suser() for the setuid(2) that gives a job its submitter's identity, so a cron
-# at uid 1 could not compose with it at all.  Running root's own commands as root gives away
-# nothing -- the crontab is 0644 and root's, so only root can put a command in it.  A setuid
-# bit on atrun remains refused; cmd/cron/README.md and cmd/at/README.md.
-file /etc/cron          # cmd/cron -- task C22.  The clock daemon: at(1) jobs are collected
-                        # every five minutes without anybody typing anything
+file /etc/cron          # clock daemon
 source ../../rootfs/etc/cron
 mode 0755
 
-# /etc/mtab IS NOT HERE, and that is the design rather than an omission: the first mount of a
-# boot creates it (cmd/mount/mtab.c), a missing one reads as an empty table, and an image
-# that shipped one would be shipping a claim about what is mounted that no boot had made.
+# ---- /bin ------------------------------------------------------------------------
 
-file /bin/sh            # cmd/sh: S. R. Bourne's shell
+file /bin/sh            # sh, for, case, if, while, **:**, **.**, break, continue, cd, eval, exec, exit, export, login,
 source ../../rootfs/bin/sh
 mode 0755
 
-# ---- enough commands to prove the prompt -----------------------------------------
-
-file /bin/at            # cmd/at -- task C21, and the first program here whose whole subject
-                        # is LATER.  It copies a script into /usr/spool/at above under the
-                        # name yyyy.ddd.hhhh.uu, and /usr/lib/atrun below runs it when that
-                        # time has passed.  THE YEAR IS FOUR DIGITS AND v7's WAS TWO: v7
-                        # wrote %02d of tm_year, which is 126 in 2026 and three characters,
-                        # and atrun read %2d back -- so every job would have been skipped in
-                        # silence.  NOT SETUID, deliberately: see the spool stanza above.
-                        # cmd/at/README.md.
+file /bin/at            # execute commands at a later time
 source ../../rootfs/bin/at
 mode 0755
 
-file /bin/awk           # cmd/awk -- task C17, the pattern-scanning language, and the only
-                        # program here built from a yacc grammar AND a lex scanner.  THE
-                        # HEAP IS ITS CEILING, not the 28,672-word one: what is left below
-                        # the stack after the image is what the parse tree, the symbol
-                        # table and every string value have to live in, so its tables carry
-                        # a size profile.  A character class was the one fat char * in the
-                        # program and the tree now holds a handle instead; ^ moved from
-                        # 0177 to 256, outside the byte range, so a regexp matches all 255
-                        # bytes; the four regexp tree walks are iterative.  cmd/awk/README.md.
+file /bin/awk           # pattern scanning and processing language
 source ../../rootfs/bin/awk
 mode 0755
 
-file /bin/basename      # cmd/basename
+file /bin/basename      # strip filename affixes
 source ../../rootfs/bin/basename
 mode 0755
 
-file /bin/bc            # cmd/bc -- task C16, the calculator language, and a COMPILER rather
-                        # than a calculator: it translates into dc(1) commands and execs
-                        # /bin/dc, which C15 put here for it.  bundle() COLLECTED ITS OWN
-                        # ARGUMENTS THROUGH &a, walking the caller's frame; arguments go in
-                        # direct order here with the last left in the accumulator, so there
-                        # is no vector to walk and it takes <stdarg.h>.  A SEMANTIC VALUE IS
-                        # A char *, never an int: v7 left YYSTYPE at int and put string
-                        # literals and register names in it, and a fat pointer does not fit
-                        # in 41 bits.  Its arena could not either -- v7 kept nested-bundle
-                        # addresses and literals in one int[] and told them apart by the
-                        # address range -- so the elements are char *b_space[] and a bundle
-                        # handle names a parallel char array, which keeps the range test and
-                        # loses the cast that would floor the pointer to its word.  THE
-                        # OUTPUT WAS A printf FORMAT: routput() ended printf(p) on strings
-                        # holding the user's own quoted text, so `"50% off"' read a
-                        # conversion off the end of an empty argument list -- which is why
-                        # the grammar spelled dc's remainder "%%" twice.  fputs(3) now, and
-                        # both literals are "%".  The bundle walk is iterative, its depth
-                        # being the input's.  Five v7 bounds were unchecked or unenforced:
-                        # bstack[10], the constant arena, `break' outside a loop reading
-                        # bstack[-1], and the arena guard that diagnosed the overflow and
-                        # then wrote anyway.  Flags are parsed in a loop and the -l library
-                        # is spliced in front of the file list, where v7 took one flag and
-                        # overwrote argv[1] -- so `bc -c -l' opened a file called -l.  End
-                        # of input exits 0, not v7's 1.  cmd/bc/README.md.
+file /bin/bc            # arbitrary-precision arithmetic language
 source ../../rootfs/bin/bc
 mode 0755
 
-file /bin/cal           # cmd/cal -- task C5f.  September 1752 still loses eleven days.
+file /bin/cal           # print calendar
 source ../../rootfs/bin/cal
 mode 0755
 
-file /bin/cat           # cmd/cat -- and what /etc/rc uses to print the motd
+file /bin/cat           # catenate and print
 source ../../rootfs/bin/cat
 mode 0755
 
-file /bin/chgrp         # cmd/chgrp -- reads /etc/group; NOT setuid, chown(2) is suser()-gated
+file /bin/chgrp         # change group
 source ../../rootfs/bin/chgrp
 mode 0755
 
-file /bin/chmod         # cmd/chmod -- NOT setuid: chmod(2) is gated on owner(), not suser()
+file /bin/chmod         # change mode
 source ../../rootfs/bin/chmod
 mode 0755
 
-file /bin/chown         # cmd/chown -- reads /etc/passwd; NOT setuid, chown(2) is suser()-gated
+file /bin/chown         # change owner or group
 source ../../rootfs/bin/chown
 mode 0755
 
-# TASK C5a's SIX -- cmp, rev, split, sum, tee and wc -- are NOT a block here.  This list is
-# alphabetical and they fall where their names do, so each carries its own `task C5a' note
-# instead: cmp below, then rev, split, sum, tee and wc further down.  They are the first of
-# the text filters, the phase that makes a userland testable -- almost every case they carry
-# runs under b6sim in a tenth of a second, with no boot at all (cmd/README.md SS9) -- and not
-# one of the six is setuid, each opening, creating or reading exactly what the caller could
-# itself.
-
-file /bin/cmp           # cmd/cmp -- task C5a; the seven `long's cmd/README.md SS3 counted
+file /bin/cmp           # compare two files
 source ../../rootfs/bin/cmp
 mode 0755
 
-file /bin/col           # cmd/col -- task C5b, and the task's one deliberate divergence: v7's
-                        # Greek half-shift stole bit 0200 of every character and its input
-                        # mask deleted the rest, so no UTF-8 letter survived.  Both are gone.
+file /bin/col           # filter reverse line feeds
 source ../../rootfs/bin/col
 mode 0755
 
-file /bin/comm          # cmd/comm -- task C5b.  Its collating order is this machine's byte
-                        # order: char is unsigned here, so a byte above 0177 sorts AFTER the
-                        # ASCII where v7's signed char put it before (SS3).
+file /bin/comm          # select or reject lines common to two sorted files
 source ../../rootfs/bin/comm
 mode 0755
 
-file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devices
+file /bin/cp            # copy
 source ../../rootfs/bin/cp
 mode 0755
 
-file /bin/crypt         # cmd/crypt -- task C19, the one-rotor machine.  It derives its key
-                        # with libc's crypt(3) rather than by forking /usr/lib/makekey
-                        # below, which is the same thirteen bytes for one call instead of a
-                        # fork, a pipe, an exec and a wait; cmd/crypt/rotor.c is that key
-                        # schedule and cmd/ed links the same file for its -x, so the two
-                        # agree by construction.  NOT SETUID: it reads its own standard
-                        # input, and the only secret it holds is the key it destroys on
-                        # entry -- a bit here would hand that to nobody and cost something.
+file /bin/crypt         # encode/decode
 source ../../rootfs/bin/crypt
 mode 0755
 
-file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT setuid, stime(2)
-                        # being suser()-gated, and that is the point
+file /bin/date          # print and set the date
 source ../../rootfs/bin/date
 mode 0755
 
-file /bin/dc            # cmd/dc -- task C15, the arbitrary-precision desk calculator and the
-                        # engine bc drives.  ITS DIGITS LIVE IN char CELLS AND ITS SIGN IS A
-                        # CELL OF -1, so an unsigned char cost it every negative number at
-                        # once; the readers sign-extend, which is v7's own answer for the
-                        # Interdata 8/32 and was already in dc.h under an #ifdef.  ONE PLACE
-                        # THEY MUST NOT: `p' has no type to go on and calls a block a string
-                        # when a cell exceeds 99, so sign extension would print `[привет]p'
-                        # as a number.  It reads raw there and allows 0377 only where a sign
-                        # cell can sit, which leaves v7's own wart -- no byte of `abc'
-                        # exceeds 99, so `[abc]p' is still a number -- and repairs the
-                        # eight-bit half.  A REGISTER NAME IS ONE BYTE and 0241 and above
-                        # name ARRAYS, so a Cyrillic letter is two commands and the first
-                        # names an array; the array walk now demands a whole PTRSZ slot and
-                        # a word that could be a header address, without which `sя' followed
-                        # by `lя' read digit bytes as pointers and took the heap with it.
-                        # AN ARRAY ELEMENT IS ONE WORD, not v7's two bytes: only the
-                        # dereference goes through the word view, every cursor staying in
-                        # the byte view, because a fat char pointer carries its marker above
-                        # an int's 41 bits and word-typed arithmetic over those same words is
-                        # wrong.  An unset element is 0, where v7's PTRSZ nulls printed nine.
-                        # log2v counted down from a 32-bit long's top bit and gave a negative
-                        # digit count for every fractional print in a base but ten.  Six v7
-                        # bounds were past their arrays or their guards: the operand stack,
-                        # the execution stack twice, copy() past a block, nalloc() past its
-                        # source, and divide() returning the integer 1 on a zero divisor,
-                        # which `0i' then a fraction reached in three keystrokes.  ^C unwinds
-                        # through setjmp: v7's handler called the command loop and never came
-                        # back, and that frame is 1,460 of the 4,096 words of stack.
-                        # cmd/dc/README.md.
+file /bin/dc            # desk calculator
 source ../../rootfs/bin/dc
 mode 0755
 
-# Task C4b, and the reason it is here rather than in /etc beside quot: dd is a general copy
-# program that happens to be the only way to reach a device in bulk, not a device tool.  NOT
-# setuid, and least of all this one -- /dev/rmd0 is mode 0600 because that node is every
-# file's contents, and a setuid dd would let anybody rewrite them.  cmd/dd/dd.c is the
-# account of the four alignment rules it obeys and of the 3072-byte block it defaults to.
-file /bin/dd            # cmd/dd -- copy and convert, and the only bulk path to /dev/rmd0
+file /bin/dd            # convert and copy a file
 source ../../rootfs/bin/dd
 mode 0755
 
-# The two of task C4a that live in /bin.  Both report in 1024-byte blocks -- three per
-# filesystem block, so their numbers are half a PDP-11's and always a multiple of three;
-# /etc/quot is the third and is further down, being root-only.
-# df is NOT setuid and must not become one -- a setuid df would hand the whole filesystem to
-# anybody who could think of an offset.  Since statfs(2) it does not need to be: a MOUNTED
-# filesystem is asked and only a device or an image is read, so a bare `df', `df /mnt' and
-# `df /some/file' work for anybody and only `df /dev/rmd0', `df image.img' and `df -w' are
-# the super-user's -- /dev/rmd0 being mode 0600, unchanged, because that one node is every
-# file's contents.  du opens no device at all.  cmd/df/README.md is the account of both
-# routes, of the four alignment rules a raw read obeys, and of the Berkeley report.
-#
-# df ALSO READS /etc/mtab, which is not staged here and is not meant to be -- see the note
-# further down: a missing one is an empty table, so a bare df on a machine that has mounted
-# nothing reports the root alone.
-file /bin/df            # cmd/df -- the BSD table off the superblock; -w walks the free list
+file /bin/df            # disk free
 source ../../rootfs/bin/df
 mode 0755
 
-file /bin/diff          # cmd/diff -- task C5f.  Hunt-Szymanski over Stone's k-candidates,
-                        # so a shortest edit script but not the same one GNU diff picks; what
-                        # cmd/diff/test asserts is that the -e script really does turn file1
-                        # into file2.  -b's blank set is written out rather than taken from
-                        # ctype(3), whose table stops at 0177.
+file /bin/diff          # differential file comparator
 source ../../rootfs/bin/diff
 mode 0755
 
-file /bin/dmesg         # cmd/dmesg -- task C8.  IN /bin, WHERE v7 KEPT IT IN /etc: v7's read
-                        # /dev/kmem and needed root, this one asks kctl(2) for the value of
-                        # msgbuf and msgbufp and opens nothing, so it is an ordinary user
-                        # command.  NOT setuid, and there is nothing for it to be setuid to.
+file /bin/dmesg         # print the kernel message ring
 source ../../rootfs/bin/dmesg
 mode 0755
 
-file /bin/du            # cmd/du -- blocks per directory, by stat(2) and a directory walk
+file /bin/du            # summarize disk usage
 source ../../rootfs/bin/du
 mode 0755
 
-file /bin/echo          # cmd/echo
+file /bin/echo          # echo arguments
 source ../../rootfs/bin/echo
 mode 0755
 
-file /bin/ed            # cmd/ed -- task C3, and THE FIRST PROGRAM ON THIS IMAGE THAT WRITES
-                        # TO /tmp: its temp file is /tmp/e<pid><letter>, in 512-byte blocks
-                        # of ed's own (cmd/README.md SS4), unlinked on a clean quit.
+file /bin/ed            # text editor
 source ../../rootfs/bin/ed
 mode 0755
 
-file /bin/egrep         # cmd/egrep -- task C26, and the second program here built from a
-                        # yacc grammar.  The transition table is 256 wide and not v7's 128:
-                        # a row was indexed with an unmasked input byte, so every byte above
-                        # 0177 took the NEXT state's transition, and a class member above
-                        # 0177 was stored past a 128-byte array in cgotofn's own STACK FRAME.
-                        # -b prints a BYTE OFFSET of the start of the line, as grep and fgrep
-                        # do; v7 printed a 512-byte block number of the END of it, so the
-                        # three commands gave three answers for one match.  -f works at all:
-                        # a char is unsigned here, so v7's test for EOF was never true.  And
-                        # the three parse-tree walks are ITERATIVE -- their depth is the
-                        # length of the pattern, and the recursion faulted this machine on an
-                        # 80-character one where the tables admit 127.  cmd/egrep/README.md.
+file /bin/egrep         # full regular expression search
 source ../../rootfs/bin/egrep
 mode 0755
 
-file /bin/expr          # cmd/expr -- task C11, the first v7 command here built from a yacc
-                        # grammar.  Four deliberate divergences, all in cmd/expr/README.md:
-                        # `<=' really is <= (v7 computed >=, the same expression it used for
-                        # `>='); a leading minus makes a number on both sides of a relation
-                        # and in arithmetic, where v7 allowed one only on a relation's left
-                        # operand, so `expr $a + 1' works on a negative $a; a paren is an
-                        # operator only when it is the whole argument; and division by zero
-                        # is diagnosed, the divide instruction faulting on it rather than
-                        # answering wrongly.  A character class is 256 bits as grep's and
-                        # sed's are, and length, substr, index and the match count are BYTES.
+file /bin/expr          # evaluate arguments as an expression
 source ../../rootfs/bin/expr
 mode 0755
 
-file /bin/file          # cmd/file -- task C5f, and the one deliberate change of it: the
-                        # magic numbers are this machine's (FMAGIC/NMAGIC/ARMAG), RELFLG
-                        # tells a linked executable from a relocatable object, the assembler
-                        # tables are b6as's -- and WELL-FORMED UTF-8 IS TEXT, where v7 called
-                        # every byte above 0177 `data' and so reported this image's own
-                        # Russian prose as binary.  A malformed byte is still data.
+file /bin/file          # determine file type
 source ../../rootfs/bin/file
 mode 0755
 
-file /bin/fgrep         # cmd/fgrep -- task C5c, with grep below.  MAXSIZ is 3000 states and
-                        # not v7's 6000: a `struct words' is four words here, so the v7
-                        # table alone was 24,000 of the 28,672 words the address space has.
+file /bin/fgrep         # fixed string search
 source ../../rootfs/bin/fgrep
 mode 0755
 
-file /bin/find          # cmd/find -- task C5f, and the only program of it with no b6sim
-                        # test at all: it reads directories, popen()s pwd and fork/execs.
-                        # -size is in 1024-byte blocks, as df/du/quot/ls -s are, where v7's
-                        # were 512; -cpio is gone (a PDP-11 tape archive with a prompt for
-                        # the next reel); and the directory walk is bounded at 20 levels,
-                        # v7 having recursed with its block in the frame and checked nothing.
+file /bin/find          # find files
 source ../../rootfs/bin/find
 mode 0755
 
-file /bin/grep          # cmd/grep -- task C5c.  A character class is 256 bits rather than
-                        # v7's 128, so a byte above 0177 has a bit of its own; that closed a
-                        # store past the class as well.  -b prints a BYTE OFFSET, which is a
-                        # deliberate divergence: v7's block number was a PDP-11 512-byte
-                        # disk block here and grep and fgrep disagreed about the same match.
+file /bin/grep          # search a file for a pattern
 source ../../rootfs/bin/grep
 mode 0755
 
-file /bin/join          # cmd/join -- task C5f.  A line holds at most 20 fields and 3071
-                        # bytes, both of which v7 stated nowhere and enforced nowhere; a
-                        # join field past the end of a line is the empty string rather than
-                        # a null pointer; and file2 may not be `-', the many-to-many path
-                        # rewinding it with fseek.
+file /bin/join          # relational database operator
 source ../../rootfs/bin/join
 mode 0755
 
-file /bin/kill          # cmd/kill -- NOT setuid: kill(2) matches uids for anyone but root
+file /bin/kill          # terminate a process with extreme prejudice
 source ../../rootfs/bin/kill
 mode 0755
 
-file /bin/ln            # cmd/ln
+file /bin/ln            # make a link
 source ../../rootfs/bin/ln
 mode 0755
 
-# NOT SETUID, and it is the entry on this list where that is worth a second look, because
-# login is the one program here that really does change uid: /etc/getty execs it as root and
-# setuid() hands the terminal to whoever answered the prompt.  The privilege is INHERITED, not
-# borrowed -- so 0755, as the v7 tree ships it.  Making it setuid would let any user re-run it
-# from a shell, which is cmd/su's job (task C6).
-file /bin/login         # cmd/login: crypt(3), and the first non-root shell on this machine
+file /bin/login         # sign on
 source ../../rootfs/bin/login
 mode 0755
 
-file /bin/look          # cmd/look -- task C5b.  Its default dictionary is /usr/dict/words
-                        # above; -d treats a byte over 0177 as a word constituent and -f
-                        # leaves it alone, a multi-byte letter having no case (SS11).
+file /bin/look          # find lines in a sorted list
 source ../../rootfs/bin/look
 mode 0755
 
-file /bin/ls            # cmd/ls
+file /bin/ls            # list contents of directory
 source ../../rootfs/bin/ls
 mode 0755
 
-file /bin/m4            # cmd/m4 -- task C13, the third program here built from a yacc
-                        # grammar and the first that is a grammar PLUS a hand-written
-                        # translation unit: m4y.y is eval's parser, m4.c the processor.
-                        # A BUILTIN IS AN INTEGER CODE IN THE NAME TABLE, not v7's address
-                        # of a one-byte malloc block.  free() puts that block back and the
-                        # next copy() takes it, so `define(`len',X)' left len the builtin --
-                        # the page's own rule, that a redefined builtin loses its meaning,
-                        # was the thing that did not happen -- and a later macro could be
-                        # handed the block and BECOME len.  Both are cases now.
-                        # THE CHARACTER TABLE IS 256 ENTRIES and end of file is tested for
-                        # by name: getc(3) masks with 0377, so v7's 128 entries were read
-                        # past above 0177 and at type[-1] on EOF, which put a stray 0377
-                        # into the output of any file ending in a macro call.  BYTES
-                        # 0200-0377 ARE LETTERS, so a macro name may be Russian, and len,
-                        # index, substr and translit count BYTES.  A NUL is an ordinary
-                        # byte, in the input and through a diversion both; v7 ended the
-                        # file on one.  eval is ONE 41-BIT WORD, not the page's 32 bits,
-                        # and division by zero is diagnosed rather than left to the divide
-                        # instruction, which faults -- as /bin/expr's is.  The temp name is
-                        # an ARRAY: v7 handed mktemp(3) a string literal and then wrote
-                        # into it four times.  errprint prints its argument literally and
-                        # not as a printf format.  A word longer than the token buffer is
-                        # emitted as text instead of running off it, and eight bounds are
-                        # checked that were not -- the call stack was one past its end and
-                        # its diagnostic unreachable, the pushback, the output and the
-                        # argument stack were untested per byte, include nesting was
-                        # unlimited, substr's missing length was 128 and index read past
-                        # the end of its first argument.  A failed sinclude no longer
-                        # swallows the pushback that was pending.  shift still says it is
-                        # not implemented, which is v7's own state.  cmd/m4/README.md.
+file /bin/m4            # macro processor
 source ../../rootfs/bin/m4
 mode 0755
 
-file /bin/make          # cmd/make -- task C14, and the first program here whose grammar
-                        # declares a %union: gram.y is the description-file parser and the
-                        # other six files the engine.  THE DEFAULT RULES ARE THIS IMAGE'S,
-                        # cc/as/yacc/lex and no more; v7's f77, Ratfor and EFL suffixes and
-                        # its -ly/-ll flags named nothing that is here.  ARCHIVE MEMBERS
-                        # RESOLVE THROUGH cmd/libaout -- lib.a(member) by name and
-                        # lib.a((entry)) through the symbol table -- because an archive
-                        # header, an object header and a symbol are six-byte words here and
-                        # not structs to be read whole; a member name and a symbol name are
-                        # therefore compared entire, not v7's first 14 and 8 bytes.
-                        # DIRECTORIES GO THROUGH opendir(3): DIRSIZ is 18 and a name off the
-                        # disk carries no terminator, so v7's 15-byte copy out of a raw
-                        # `struct direct' could not stand.  doname() RECURSES ONCE PER LEVEL
-                        # of the graph at 214 words of a 4,096-word stack, so the depth is
-                        # bounded at 11 and says so rather than faulting.  funny[] is 256
-                        # entries and not v7's 128, a char being unsigned, so a target and a
-                        # command may be Russian.  subst() and the description line are
-                        # bounded, which they were not; sprintf(3) returns an int here and
-                        # v7 passed its value to fatal() as a string; mkqlist() returned
-                        # nothing at all on the empty list and wrote one byte below its
-                        # buffer on a full one.  A built-in rule is copied before it is
-                        # parsed: eqsign() writes into the line and a literal is not
-                        # writable here.  cmd/make/README.md.
+file /bin/make          # maintain program groups
 source ../../rootfs/bin/make
 mode 0755
 
-file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on owner(), and
-                        # the terminal is the user's only because login chowned it.  The nodes
-                        # below ship 0622, so a fresh boot answers `is y'.
+file /bin/mesg          # permit or deny messages
 source ../../rootfs/bin/mesg
 mode 0755
 
-file /bin/more          # cmd/more -- Berkeley's pager (Eric Shienbrood, UCB); task C27, and
-                        # the second program here that is not a port of a v7 command: v7 had
-                        # no pager at all.  Its help text is COMPILED IN, so there is no
-                        # /usr/lib/more.help beside it; it DOES read /etc/termcap, being
-                        # the first program on this image to link lib/libtermcap, and it
-                        # reads the arrow, page, Home and End keys out of the same entry.
-                        # $TERM unset means xterm, and so does a $TERM the database does
-                        # not have.  Its search is for a LITERAL string --
-                        # re_comp/re_exec are not in this libc, and novi's search is literal
-                        # for the same reason.  NOT setuid: it opens what its caller could.
+file /bin/more          # file perusal filter for crt viewing
 source ../../rootfs/bin/more
 mode 0755
 
-# /bin/less IS /bin/more: the same inode under a second name, and the second hard link on
-# this image after /bin/[ -> /bin/test.  Unlike that one it is a CONVENIENCE and not a
-# reachability fix -- cmd/test/test.c reads argv[0] and has a branch that only the other
-# name reaches, whereas nothing whatever in more.c looks at its own name (upstream's `page'
-# alias did, and the port deleted it).  So `less' is a second spelling for the fingers of
-# whoever learned the other one, and is not GNU less: it pages forward, `b' pages back, and
-# more(1) is the page that documents it.  kernel/test's rootimg_link_more asserts the shared
-# inode once the image is built, as rootimg_link does for /bin/[.
 link /bin/less
 target /bin/more
 
-file /bin/nice          # cmd/nice -- task C8.  NOT setuid: nice(2) is what refuses a negative
-                        # increment to anyone but root (kernel/sys4.c), so a mode bit here
-                        # would only hand out the thing the kernel is busy withholding.
+file /bin/nice          # run a command at low priority
 source ../../rootfs/bin/nice
 mode 0755
 
-file /bin/novi          # cmd/novi -- Dave W Plummer's full-screen editor; task C12, and the
-                        # first program here that is not a port of a v7 command.  Its document
-                        # is never in memory: two unlinked /tmp files hold it with a gap at
-                        # the cursor,
-                        # and a third is the cut buffer.  NOT setuid -- it reads and writes
-                        # as its caller.  Wants an ANSI terminal; the Consul is one only
-                        # because SIMH's line is raw8 and passes the escapes through.
+file /bin/novi          # full-screen text editor
 source ../../rootfs/bin/novi
 mode 0755
 
-file /bin/od            # cmd/od -- task C5b.  -o/-d/-x go on meaning THE MACHINE WORD, which
-                        # is 48 bits here: 16 octal digits, 15 decimal, 12 hex.  -w is a
-                        # second name for -o.  Bytes pack most significant first, as getw(3).
+file /bin/od            # octal dump
 source ../../rootfs/bin/od
 mode 0755
 
-file /bin/pr            # cmd/pr -- task C5f.  Its multi-column look-ahead lives in one
-                        # 6720-byte ring, and a page that needs more of it than that is a
-                        # diagnostic: v7 checked nothing there and silently began the
-                        # affected column part way down the file.  The two in-band sentinels
-                        # 0375 and 0376 are kept, neither byte being reachable in UTF-8.
-                        # Columns are counted in bytes, as col(1)'s are.
+file /bin/pr            # print file
 source ../../rootfs/bin/pr
 mode 0755
 
-file /bin/ps            # cmd/ps -- task C8.  NOT SETUID AND NOT ROOT-ONLY EITHER, since
-                        # KCTL_PSINFO: the proc table and the four u-area fields both come
-                        # through kctl(2) and neither needs privilege, so ps opens no device
-                        # at all.  It used to open /dev/kmem and /dev/mem, both 0640 and
-                        # root's; THOSE MODES ARE UNCHANGED and lib/test/unprivt asserts it.
-                        # A setuid ps would hand every process's memory to everybody through
-                        # a program that already knows the layout -- quot's argument about
-                        # /dev/rmd0 in the block below -- which is why the fix was to stop
-                        # asking for memory rather than to lend it out.
+file /bin/ps            # process status
 source ../../rootfs/bin/ps
 mode 0755
 
-file /bin/pwd           # cmd/pwd
+file /bin/pwd           # working directory name
 source ../../rootfs/bin/pwd
 mode 0755
 
-file /bin/rev           # cmd/rev -- task C5a, and the one deliberate divergence in it: it
-                        # reverses UTF-8 SEQUENCES where v7 reversed bytes, this machine's
-                        # text being UTF-8 end to end (cmd/README.md SS11).  See
-                        # cmd/rev/README.md.
+file /bin/rev           # reverse lines of a file
 source ../../rootfs/bin/rev
 mode 0755
 
-file /bin/rm            # cmd/rm -- NOT setuid: `rm -r' execs /bin/rmdir, which is
+file /bin/rm            # remove (unlink) files
 source ../../rootfs/bin/rm
 mode 0755
 
-file /bin/sed           # cmd/sed -- task C5e.  A character class is 256 bits and a y///
-                        # table 256 entries, where v7's were 128 of each and each was
-                        # indexed by an UNMASKED byte on one side: the first stored past
-                        # the class it was compiling and the second read past the table it
-                        # was applying.  A backslash-escaped byte of an s/// replacement is
-                        # marked with a QESC prefix rather than with bit 0200 of the byte,
-                        # so `s/x/привет/' produces привет and not ten bytes of plausible
-                        # ASCII.  A line past 4000 bytes is a diagnostic on the input path
-                        # and on the output path alike; v7 truncated one in silence and
-                        # announced the other without acting on it.
+file /bin/sed           # stream editor
 source ../../rootfs/bin/sed
 mode 0755
 
-file /bin/sleep         # cmd/sleep -- a decimal parse around libc's sleep(3): alarm + pause
+file /bin/sleep         # suspend execution for an interval
 source ../../rootfs/bin/sleep
 mode 0755
 
-file /bin/sort          # cmd/sort -- task C5d.  Its temp files are /tmp/stm<pid><letters>,
-                        # made and unlinked as it runs: /usr/tmp is not tried, this image
-                        # having none.  -d and -i keep a byte above 0177 SIGNIFICANT, where
-                        # v7's tables ignored all of 0200..0377 and so made two Cyrillic
-                        # words compare equal.  A line longer than 3072 bytes is a diagnostic
-                        # on both the sort and the merge path; v7 truncated it on one of them
-                        # and had no limit at all on the other.
+file /bin/sort          # sort or merge files
 source ../../rootfs/bin/sort
 mode 0755
 
-file /bin/split         # cmd/split -- task C5a; the pieces land in the working directory
+file /bin/split         # split a file into pieces
 source ../../rootfs/bin/split
 mode 0755
 
-file /bin/stty          # cmd/stty -- task C6.  NOT setuid: gtty/stty are gated on holding
-                        # the descriptor.  Its capability list is CUT to what dev/tty.c
-                        # honours -- no speeds, no parity, no delays, no LCASE, no hup.
+file /bin/stty          # set terminal options
 source ../../rootfs/bin/stty
 mode 0755
 
-file /bin/sum           # cmd/sum -- task C5a.  Its block count is in 1024-byte blocks, like
-                        # df's, du's, quot's and `ls -s' (cmd/README.md SS4); v7's was in the
-                        # PDP-11's 512-byte ones.  The checksum is bit for bit v7's.
+file /bin/sum           # sum and count blocks in a file
 source ../../rootfs/bin/sum
 mode 0755
 
-file /bin/sync          # cmd/sync -- what flushes the buffer cache before the machine stops
+file /bin/sync          # update the super block
 source ../../rootfs/bin/sync
 mode 0755
 
-file /bin/tee           # cmd/tee -- task C5a, and the only one of the six with no stdio at
-                        # all: read(2) and write(2), in BSIZE buffers where v7 used the
-                        # PDP-11's 512
+file /bin/tee           # pipe fitting
 source ../../rootfs/bin/tee
 mode 0755
 
-file /bin/tail          # cmd/tail -- task C5b.  `-b' counts BSIZE here, not the PDP-11's 512
-                        # (SS4), so it agrees with dd's `b' suffix.  No stdio at all.
+file /bin/tail          # deliver the last part of a file
 source ../../rootfs/bin/tail
 mode 0755
 
-file /bin/tar           # cmd/tar -- task C7, and the first thing here that moves a TREE.
-                        # `f' is MANDATORY: v7 defaulted to /dev/mt1 and this machine has no
-                        # tape, and the digits 0-7 that picked a drive are gone with it -- a
-                        # default that could name /dev/rmd0, the pack the system is running
-                        # on, is not one worth having.  `u' is gone too: its index needed awk.
-                        # An archive on /dev/rmd? obeys physio()'s four rules, so the
-                        # blocking factor there must be a multiple of 6 (6 * 512 == BSIZE)
-                        # and `r' is refused, a raw device having no backspace.  NOT setuid;
-                        # it execs the setuid /bin/mkdir to make a directory on extraction,
-                        # this system having no mkdir(2).  cmd/tar/README.md is the account.
+file /bin/tar           # archiver
 source ../../rootfs/bin/tar
 mode 0755
 
-file /bin/test          # cmd/test -- what lets a shell script branch; see /bin/[ below
+file /bin/test          # condition command
 source ../../rootfs/bin/test
 mode 0755
 
-file /bin/time          # cmd/time -- times(2) in 250ths of a second here, not the PDP-11's 60ths
+file /bin/time          # time a command
 source ../../rootfs/bin/time
 mode 0755
 
-file /bin/touch         # cmd/touch -- utime(2) here, not v7's rewrite-a-byte; see cmd/touch
+file /bin/touch         # update the date of a file
 source ../../rootfs/bin/touch
 mode 0755
 
-file /bin/tr            # cmd/tr -- task C5b.  The one filter of the seven that was eight-bit
-                        # clean already: its tables are [256] as v7 wrote them, so `tr a-z
-                        # A-Z' folds the ASCII and leaves a Cyrillic letter alone (SS11).
+file /bin/tr            # translate characters
 source ../../rootfs/bin/tr
 mode 0755
 
-file /bin/tsort         # cmd/tsort -- task C5f, and lorder(1)'s other half.  An item is
-                        # any run of bytes with no blank in it, so a Cyrillic name sorts
-                        # like any other; one past 255 bytes -- ar(1)'s longest member
-                        # name here -- is a diagnostic where v7 overran a 50-byte buffer.
+file /bin/tsort         # topological sort
 source ../../rootfs/bin/tsort
 mode 0755
 
-file /bin/tty           # cmd/tty -- ttyname(3), which reads /dev as a directory
+file /bin/tty           # get terminal name
 source ../../rootfs/bin/tty
 mode 0755
 
-file /bin/uniq          # cmd/uniq -- task C5b.  Compares whole bytes and masks none, so a
-                        # Cyrillic line compares like any other (SS11).
+file /bin/uniq          # report repeated lines in a file
 source ../../rootfs/bin/uniq
 mode 0755
 
-file /bin/units         # cmd/units -- task C18, the first program here whose whole subject is
-                        # floating point, reading the /usr/lib/units table below.  A BESM-6
-                        # float is one word: 5.42e-20 to 9.22e+18, twelve digits, and an
-                        # OVERFLOW IS A FAULT rather than the signal v7 caught -- so every
-                        # product and quotient is range-gated before the fact and the six
-                        # definitions that do not fit are commented out of the table.  It
-                        # installs a SIGFPE handler all the same, and is the only program on
-                        # this image that does: the kernel raises that signal now
-                        # (kernel/trap.c), and the gates should mean it never arrives.
+file /bin/units         # conversion program
 source ../../rootfs/bin/units
 mode 0755
 
-file /bin/vmstat        # cmd/vmstat -- not a v7 program: 2.11BSD's, and the reader a dozen
-                        # of kernel/kctl.c's rows were being kept for.  IN /bin, AS 2.11BSD
-                        # HAD IT, and for dmesg's reason above rather than the section: it
-                        # asks kctl(2) for its numbers and opens no device, so it is an
-                        # ordinary user command.  procs and memory from a scan of proc[] and
-                        # coremap, the two devices, four rate counters, and the dk_time
-                        # histogram cut the other way from iostat's.  NOT setuid.
+file /bin/vmstat        # report system activity
 source ../../rootfs/bin/vmstat
 mode 0755
 
-file /bin/wc            # cmd/wc -- task C5a.  A byte above 0177 is a WORD CONSTITUENT here,
-                        # not a delimiter as v7 had it, so a Cyrillic line counts (SS11); the
-                        # characters it counts are bytes.
+file /bin/wc            # word count
 source ../../rootfs/bin/wc
 mode 0755
 
-file /bin/who           # cmd/who -- task C6.  The first reader /etc/utmp has ever had; init
-                        # and login were the only programs that touched that file before it.
+file /bin/who           # who is on the system
 source ../../rootfs/bin/who
 mode 0755
 
-file /bin/write         # cmd/write -- task C6.  NOT setuid: the terminal nodes are 0622, so
-                        # the open needs nothing -- and write makes the mesg(1) check ITSELF,
-                        # which a setuid bit would be defeating rather than enabling.
+file /bin/write         # write to another user
 source ../../rootfs/bin/write
 mode 0755
 
-file /bin/yes           # cmd/yes -- the only program here that a SIGPIPE has to stop
+file /bin/yes           # print a string repeatedly
 source ../../rootfs/bin/yes
 mode 0755
 
-# ---- and the one file that is a second NAME rather than a second file -------------
-#
-# THE ONLY HARD LINK ON THIS IMAGE, added by task C2b.  /bin/[ is /bin/test: the same inode
-# with a link count of 2, which is v7's arrangement and not a convenience -- cmd/test/test.c
-# looks at argv[0] and requires a closing `]' when it was entered by this name, so without the
-# link that branch of the program is unreachable code.  `link' takes a `target' and no
-# `source' or `mode': there is nothing to copy in and nothing to set, the inode being the
-# other entry's already (cmd/fsutil/manifest.cpp resolves links last, so the order here does
-# not matter).  kernel/test's rootimg_link asserts the two share an inode once the image is
-# built, for the same reason rootimg_setuid exists: nothing but the finished image can say.
 link /bin/[
 target /bin/test
 
-# ---- THE SETUID PROGRAMS HERE: three that change a DIRECTORY, and since task C6 --
-# ---- three that change WHO YOU ARE ------------------------------------------------
-#
-# `mode 04755' -- 04000 is ISUID, and it is the whole of the work.  b6fsutil carries it
-# through: manifest.cpp parses the number as an octal literal and add_file() writes
-# `IFREG | (mode & 07777)' into the inode, and 07777 includes 04000.  The kernel end is
-# getxfile()'s SUID block in kernel/sys1.c.
-#
-# WHY THEY NEED IT.  There is no mkdir(2), rmdir(2) or rename(2) on this system; a directory
-# is built, taken apart and re-parented by hand, and every call that does so is gated on
-# suser() -- mknod(), the directory arm of link(), and the directory arm of unlink().  None of
-# the three programs grants more than that: each makes its own access() check against the REAL
-# uid on the parent directory first, so root is borrowed for those calls and for nothing else.
-# cmd/mkdir/README.md is the general account and cmd/mv/README.md is mv's.
-#
-# mv is the one to look at twice, because it is the only one that is setuid for SOME of what
-# it does: mv.c returns into mvdir() before it reaches setuid(getuid()), so a directory rename
-# keeps the borrowed root and every other form of mv drops it first.  Moving that one line
-# would hand root to a plain file move.
-#
-# NOTHING IN build/rootfs/ CARRIES A MODE -- the staged file is an ordinary 0755 build
-# artifact and this line is the only place the bit exists.  Which is why rootimg_setuid
-# (kernel/test/CMakeLists.txt) reads it back off the finished image rather than trusting it.
-
-file /bin/mkdir         # cmd/mkdir -- SETUID ROOT: mknod(2) and link(2) on a directory
+file /bin/mkdir         # make a directory
 source ../../rootfs/bin/mkdir
 mode 04755
 
-file /bin/mv            # cmd/mv -- SETUID ROOT: link(2) and unlink(2) on a directory
+file /bin/mv            # move or rename files and directories
 source ../../rootfs/bin/mv
 mode 04755
 
-file /bin/rmdir         # cmd/rmdir -- SETUID ROOT: unlink(2) on a directory
+file /bin/rmdir         # remove a directory
 source ../../rootfs/bin/rmdir
 mode 04755
 
-# THE OTHER THREE ARE TASK C6's, and what they borrow root for is not a directory but an
-# IDENTITY.  cmd/login is the program that made them possible and it is deliberately NOT
-# setuid -- its privilege is inherited from getty, which init forked as root -- so until
-# these three there was no way to change uid or gid from a shell at all.  cmd/login/README.md
-# named su in advance for exactly this reason.
-#
-# Each drops what it borrowed, and the ORDER is load-bearing in the same way login's is:
-# setuid(2) moves the REAL uid as well (kernel/sys4.c), so there is no way back afterwards
-# and it has to be the last privileged act each of them performs.
-#
-#   su       setuid()/setgid() to the account that answered the prompt.  getuid() is the
-#            real uid, which is what makes v7's `getuid() == 0 skips the password' correct.
-#   newgrp   setgid() to a group the caller is not in -- allowed only through suser() --
-#            and then setuid(getuid()) straight back down.
-#   passwd   the narrowest of the three: it wants nothing but write permission on this
-#            file, which is 0644 and root's.
-#
-# THEY ARE ALSO WHAT FINALLY MAKES getxfile()'s ISUID BRANCH ORDINARY.  cmd/README.md §8
-# records that the branch is taken only `if (u.u_uid != 0)' and that every shell on this
-# image used to be root's, so lib/test/suidt had to drop to uid 7 on purpose to reach it.
-# A guest who types `su' reaches it by accident now, which is the point.
-
-file /bin/newgrp        # cmd/newgrp -- SETUID ROOT: setgid(2) to a group you are not in
+file /bin/newgrp        # log in to a new group
 source ../../rootfs/bin/newgrp
 mode 04755
 
-file /bin/passwd        # cmd/passwd -- SETUID ROOT: it writes /etc/passwd, which is root's
+file /bin/passwd        # change login password
 source ../../rootfs/bin/passwd
 mode 04755
 
-file /bin/su            # cmd/su -- SETUID ROOT: setuid(2)/setgid(2) to another account
+file /bin/su            # substitute user id temporarily
 source ../../rootfs/bin/su
 mode 04755
 
-# THE SEVENTH, task C28, and the only one that borrows root to touch ANOTHER USER'S FILE
-# rather than a directory or its own identity.  mail's deliver() does three things an
-# ordinary user cannot: it appends to a mailbox that is 0644 and somebody else's, it
-# chown(2)s a mailbox it has just created to the recipient -- suser()-gated, and gated
-# precisely so a user cannot give a file away -- and it chmod(2)s the user-execute bit that
-# is this system's mailbox lock, which owner() would refuse.
-#
-# The same ORDER argument as the three above, and here it is the whole safety case: mail is
-# an INTERACTIVE program with a shell escape (`!cmd'), a `save to any file' command and a
-# -f that opens whatever it is handed.  setuid(getuid()) is the FIRST STATEMENT of
-# printmail() (cmd/mail/mail.c), so every one of those runs as the reader; the borrowed root
-# lives in deliver() and nowhere else.  Moving that line would hand root to the shell escape.
-file /bin/mail          # cmd/mail -- SETUID ROOT: chown(2) and chmod(2) on another mailbox
+file /bin/mail          # send or receive mail among users
 source ../../rootfs/bin/mail
 mode 04755
 
-# ---- the static files of /etc ----------------------------------------------------
-#
-# /etc/rc is 0644, NOT 0755: runcom() in cmd/init/init.c execs `sh /etc/rc', never the
-# script itself.  There is no `#!' on this system -- the shebang is a 4.xBSD invention, and
-# neither getxfile() nor b6sim implements it -- so a script is never executed directly;
-# either the shell is told to read it, or exec comes back ENOEXEC and the shell reads it
-# anyway (cmd/sh/README.md).
+# ---- /etc -- the static files ----------------------------------------------------
 
-file /etc/rc            # the boot script; etc/rc
+file /etc/rc            # the boot script
 source ../../rootfs/etc/rc
 mode 0644
 
-file /etc/motd          # the message of the day, printed by /etc/rc; etc/motd
+file /etc/motd          # message of the day
 source ../../rootfs/etc/motd
 mode 0644
 
-file /etc/passwd        # v7's, read by `ls -l' to turn a uid into a name; etc/passwd
+file /etc/passwd        # change login password
 source ../../rootfs/etc/passwd
 mode 0644
 
-file /etc/group         # the groups /etc/passwd's gids name; etc/group
+file /etc/group         # group file
 source ../../rootfs/etc/group
 mode 0644
 
-# THE FILE THAT TURNS THIS INTO A MULTI-USER SYSTEM, and the whole of what task 29b had to
-# add beyond two programs.  cmd/init/init.c's merge() reads it and forks an /etc/getty per
-# enabled line; without it merge() returns at the failed open, multiple() falls straight
-# through, and the boot is the single-user loop this port lived in until now.  Two lines,
-# `console' and `tty1' -- the two Consuls, dev/sc.c's minors 0 and 1.  Format: ttys(5)
-# (include/man/ttys.5.umm) and rline() in cmd/init/init.c.  It is also what makes ttyslot(3)
-# answer, and therefore getlogin(3): lib/test/ttyt is the assertion of that.
-file /etc/ttys          # the terminal lines a getty sits on; etc/ttys
+file /etc/ttys          # terminal initialization data
 source ../../rootfs/etc/ttys
 mode 0644
 
-# The terminal capability database, read by tgetent() in lib/libtermcap.  BSD's
-# termcap.small verbatim -- five entries, no `dumb', and vt100's `if=' names a tabset file
-# that is not on this image; lib/libtermcap/README.md says why none of that is edited out.
-# /mnt/test/termcapt reads it from here -- off this pack, not its own -- and reads THE SAME
-# FILE (etc/termcap in the source tree) under b6sim through $TERMCAP.
-file /etc/termcap       # the terminal capability database; etc/termcap
+file /etc/termcap       # terminal independent operation routines
 source ../../rootfs/etc/termcap
 mode 0644
 
-# THE LIBRARY TEST PROGRAMS ARE NOT HERE ANY MORE.  lib/test/*.c were /usr/test from task 25c
-# until the test pack took them (test.manifest); they are /mnt/test/* now.  What that leaves
-# behind is /bin/sh as the only PURE (NMAGIC) image on this disk -- puret was the other.
+# ---- /lib -- what cc links against -----------------------------------------------
 
-file /usr/bin/cpp       # cmd/cpp built natively -- task C9a, the first step of self-hosting
-                        # and the first program here whose sources are also a host tool's
-                        # (b6cpp).  Its size profile is not the host one: cmd/cpp/defs.h
-                        # cuts BUFSIZ/SBSIZE/SYMSIZ and bounds macro-argument nesting under
-                        # the `besm6' predefine, deliberately below the C11 minima, because
-                        # this address space and this 4,096-word stack cannot hold them.
-                        # cmd/cpp/README.md, "Building for the BESM-6", has the measurements.
-source ../../rootfs/usr/bin/cpp
-mode 0755
-
-file /usr/bin/as        # cmd/as built natively -- task C9b, the second step of self-hosting.
-                        # Same shape as cpp above: one set of sources, two builds, and only a
-                        # size profile between them.  cmd/as/as.h cuts HASHSZ/HCONSZ/HCMDSZ
-                        # under the `besm6' predefine, because the host sizes come to ~28,300
-                        # words and a user program gets 28,672 for everything including its
-                        # heap.  It also bounds expression nesting (MAXEXPRDEPTH), which the
-                        # host build does not: that recursion's depth is chosen by the input
-                        # and this machine's 4,096-word stack is unchecked.
-                        # cmd/as/README.md, "Building for the BESM-6", has the measurements.
-source ../../rootfs/usr/bin/as
-mode 0755
-
-file /usr/bin/ld        # cmd/ld built natively -- task C9b, and the point of the exercise:
-                        # with this and /usr/bin/as beside /usr/bin/cpp, the machine can
-                        # assemble and link its own programs.  It links THE WHOLE KERNEL and
-                        # every program on this disk byte-for-byte identically to the host
-                        # b6ld, itself included.  cmd/ld/intern.h cuts NSYM/NSYMPR/NCONST/
-                        # NCINDEX/RANTABSZ under the `besm6' predefine and gives every stdio
-                        # stream a smaller buffer: the linker holds twelve open at once, and
-                        # at the default BUFSIZ that alone is 6,144 words of heap.
-                        # cmd/ld/README.md, "Building for the BESM-6", has the measurements.
-source ../../rootfs/usr/bin/ld
-mode 0755
-
-# THE READ-ONLY BINUTILS, task C9c, and what makes the three above usable: with these the
-# machine can read back what it just built.  All four are the same shape as cpp/as/ld --
-# one set of sources, two builds -- but only two of them changed anything at all for the
-# target, and neither change is an address-space cut.  They are small: nm is 6,147 words,
-# disasm 6,439, strip 5,501 and size 5,068, where cpp and ld are near 24,000.
-
-file /usr/bin/nm        # cmd/nm built natively.  The one number the target changes is
-                        # QUANT, the symbol table's growth step, and it is a HEAP number
-                        # the rootfs_nm_size check cannot see: a `struct nlist' is four
-                        # words here, so the host's 2048 asks for 8,192 words at once and
-                        # 24,576 at the first realloc().  256 is one malloc page, and the
-                        # corpus fits in three of them -- the largest symbol table in the
-                        # tree is the kernel's 623.  cmd/nm/README.md has the measurements.
-source ../../rootfs/usr/bin/nm
-mode 0755
-
-file /usr/bin/size      # cmd/size built natively.  Nothing about it changed for the
-                        # target: it reads a header, prints six numbers and holds nothing
-                        # while it does.  The only one of the four with no size profile at
-                        # all, which is why it went first.  cmd/size/README.md.
-source ../../rootfs/usr/bin/size
-mode 0755
-
-file /usr/bin/strip     # cmd/strip built natively -- the only one of the four that WRITES,
-                        # rewriting the file it is given through a tmpfile() scratch stream,
-                        # so it wants the /tmp above and the others do not.  Two things
-                        # changed for the target and both are in cmd/strip/strip.c: BUFSZ,
-                        # the copy chunk, which is 8,192 bytes of STACK on the host and
-                        # 1,366 words of a 4,096-word stack here; and mkstemp(), which this
-                        # libc has not got.  cmd/strip/README.md.
-source ../../rootfs/usr/bin/strip
-mode 0755
-
-file /usr/bin/disasm    # cmd/disasm built natively.  Not a v7 program at all -- this repo
-                        # wrote it -- and the one place the machine reads its own
-                        # instruction encoding back.  Nothing changed for the target; the
-                        # two mnemonic tables are 80 const pointers and the line buffer is
-                        # 64 bytes.  The Cyrillic (BEMSH) names are UTF-8 literals and come
-                        # through b6cc unharmed, which the -b agreement case asserts.
-                        # cmd/disasm/README.md.
-source ../../rootfs/usr/bin/disasm
-mode 0755
-
-file /usr/bin/lorder    # cmd/lorder -- a SHELL SCRIPT, and the only thing task C9c put here
-                        # that is not compiled.  It came along with nm, which was the last
-                        # program its pipe wanted that this image had not got: sed, sort,
-                        # join, basename and tsort have been here since C5f.  The copy is
-                        # configured from cmd/lorder/lorder.sh.in with nm rather than b6nm
-                        # as its default, and the script is written to parse under v7's sh
-                        # -- backquotes, and ${name-word} with no colon.  It has no `#!'
-                        # line and wants none: this kernel has no such thing, and the shell
-                        # reads a file back itself when exec returns ENOEXEC.
-source ../../rootfs/usr/bin/lorder
-mode 0755
-
-# THE ARCHIVE PAIR, task C9d, and the link that closes the chain: with these the machine
-# builds its own libc.a -- archive and index both -- and the result is byte for byte what
-# the host b6ar and b6ranlib produce.  They are the first two programs here to link the
-# FULL cmd/libaout list: getarhdr, getint, putarhdr and putint, the four file-descriptor
-# routines that exist for ar and ranlib and for nothing else.  ar is 8,504 words and
-# ranlib 11,333 -- the difference is that ranlib carries the whole archiver inside it.
-
-file /usr/bin/ar        # cmd/ar built natively.  NOTHING in its sources changed for the
-                        # target -- the third of the nine with no `besm6' size profile at
-                        # all, after size and disasm -- because it keeps its state in a
-                        # ~190-word struct rather than in the tens of thousands of words
-                        # cpp, as and ld each had to have lifted out.  What DID change is
-                        # in libc: mkstemp(), which ar calls three times and this libc had
-                        # not got.  as, ld and strip all escaped it by moving to tmpfile();
-                        # ar cannot, because it wants the temp file's NAME (finish() unlinks
-                        # it) and a descriptor it can read back at the end.  So it wants the
-                        # /tmp above, as strip does -- and unlike strip it will use the
-                        # current directory instead under -l.  cmd/ar/README.md.
-source ../../rootfs/usr/bin/ar
-mode 0755
-
-file /usr/bin/ranlib    # cmd/ranlib built natively -- and it CONTAINS ALL OF ar, because
-                        # ranlib_run() rebuilds the archive in process through ar_run().
-                        # There are two copies of the archiver on this disk and that was
-                        # the choice: the pair costs 37 of the 830 blocks this image had
-                        # free and an exec of /usr/bin/ar would give back at most 16, at
-                        # the price of a hard-coded path and an
-                        # `#if besm6' fork in sources every other C9 task kept single.
-                        # The one number the target changes is TABSZ, the __.SYMDEF table,
-                        # 1000 -> 512 -- not an address-space cut but a match to b6ld's own
-                        # RANTABSZ, so this ranlib cannot write an index the machine's
-                        # linker would refuse to read.  It writes its scratch __.SYMDEF
-                        # into the CURRENT directory, so it wants a writable cwd rather
-                        # than /tmp.  cmd/ranlib/README.md.
-source ../../rootfs/usr/bin/ranlib
-mode 0755
-
-# THE C9e BLOCK: the driver, and the two directories that make it worth having.  With
-# /usr/bin/cc the machine can drive its own toolchain from one command -- and with /lib
-# and /usr/include below it can drive it all the way to a runnable a.out:
-#
-#	$ cc -o hello hello.s
-#
-# is /usr/bin/cpp, /usr/bin/as and /usr/bin/ld, /lib/crt0.o at the head of the link and
-# /lib/{libc.a,libruntime.a} at the end of it, all of them this disk's own.  What it
-# CANNOT do is start from hello.c: the parse, lower and codegen passes belong to the
-# external c-compiler repository, which this one cannot build for the target, and cc says
-# so rather than reporting a missing file.  cmd/cc/README.md, "It cannot compile C".
-
-file /usr/bin/cc        # cmd/cc built natively -- task C9e, the last of C9 and the only
-                        # program of the eleven that is a DRIVER: it parses arguments,
-                        # searches a path and forks.  Two things differ from the host
-                        # build and both are in the one profile at the head of cmd/cc.c:
-                        # the search is /usr/bin, /usr/include and /lib rather than
-                        # share/besm6 under ~/.local or /usr/local, and a sub-tool here
-                        # is `cpp' where the host needs `b6cpp' to tell it from its own.
-                        # The spawn is NOT keyed -- fork, execv and wait are what v7's cc
-                        # did and what this kernel has, so both builds take them.  What
-                        # changed for the target is in libc: strdup(), mkstemps() and
-                        # atexit(), the last of which <stdlib.h> had declared since these
-                        # headers were written and nothing had implemented.
-                        # cmd/cc/README.md.
-source ../../rootfs/usr/bin/cc
-mode 0755
-
-file /usr/bin/yacc      # cmd/yacc built natively -- task C10c, and the toolchain's twelfth
-                        # program.  Same shape as the eleven above: one set of sources, two
-                        # builds, a size profile between them.  cmd/yacc/dextern.h cuts all
-                        # ten table sizes under the `besm6' predefine -- at the host's they
-                        # are 66,813 words against 28,672 -- and shrinks every stdio buffer,
-                        # yacc holding seven streams open and calling no malloc.  Capacity
-                        # does not enter the output, so this yacc and b6yacc emit identical
-                        # y.tab.c; rootfs_yacc_* asserts it live.  cmd/yacc/README.md,
-                        # "Building for the BESM-6".  Needs /usr/lib/yaccpar below.
-source ../../rootfs/usr/bin/yacc
-mode 0755
-
-file /usr/bin/lex       # cmd/lex built natively -- task C10d, and the toolchain's thirteenth
-                        # program.  ITS HEAP IS WHAT BINDS, not rootfs_lex_size: nearly every
-                        # table lex owns is calloc'd, so the size check sees almost none of
-                        # it.  cmd/lex/ldefs.h cuts the five bounds under the `besm6'
-                        # predefine, measured from awk.lx.l -- and awk.lx.l also wanted the
-                        # parse-tree walk taken off the 4,096-word stack, 96 frames of 35
-                        # words being more than the whole of it.  Capacity does not enter the
-                        # output, so this lex and b6lex emit identical lex.yy.c;
-                        # rootfs_lex_* asserts it live.  cmd/lex/README.md, "Building for the
-                        # BESM-6".  Needs /usr/lib/lex/ncform below.
-source ../../rootfs/usr/bin/lex
-mode 0755
-
-# AND TWO PROGRAMS HERE THAT ARE NOT THE TOOLCHAIN'S.  /usr/bin held the eleven of task C9
-# and nothing else; man and manview are the fourteenth and fifteenth entries and the first
-# that are not compiled by, for or into the compiler chain.  They are here rather than in /bin
-# because v7 put man here, the shell's default path is `:/bin:/usr/bin' (cmd/sh/msg.c), and
-# both are programs about /usr and not about the root -- which is also why the ls /bin
-# expectations in the deleted kernel/test/console.ini and session.expected did not have to move.
-
-file /usr/bin/man       # cmd/man -- task C25b, and the first program on this image that
-                        # reads /usr/man above.  IT DOES NOT FORMAT ITSELF: it finds the file
-                        # and runs one formatter over it, /usr/bin/manview below, piped into
-                        # /bin/more when standard output is a terminal and into nothing at all
-                        # when it is not.  `man - page' bypasses both and copies the source
-                        # out, which is what that flag was defined for.
-                        # THE SECTION SEARCH IS AN ORDERED TABLE and not a readdir: thirteen
-                        # of the pages above -- mount, chmod, passwd, kill, time, write and
-                        # seven more -- exist in two sections at once, and only that order
-                        # decides which one a bare `man mount' answers with.
-                        # NOT setuid: it opens what its caller could open itself.
-source ../../rootfs/usr/bin/man
-mode 0755
-
-file /usr/bin/manview   # cmd/manview -- task C25a, and what FORMATS the pages above.  There
-                        # is no nroff on this machine and none is coming; the pages are the
-                        # dialect doc/Manual_Page_Format.md describes and this reads it, fills
-                        # a paragraph to eighty columns, indents by v7's five, and carries the
-                        # fonts as ANSI SGR attributes and colour.
-                        # ITS ATTRIBUTES ARE ON BY DEFAULT AND NOT CONDITIONED ON A TERMINAL,
-                        # because man hands it a PIPE into more whenever a human is reading;
-                        # `manview -p' is the plain-text form and is what a script wants.
-                        # NO DATA FILE: there is no terminal database on this image, so the
-                        # attribute table is compiled in, as more(1)'s ANSI already is.
-                        # NOT setuid: it opens what its caller could open itself.
-source ../../rootfs/usr/bin/manview
-mode 0755
-
-file /usr/bin/calendar  # cmd/calendar -- task C23, the reminder service, and THE SECOND SHELL
-                        # SCRIPT ON THIS IMAGE after /usr/bin/lorder above.  Everything said
-                        # there about `#!' applies here unchanged, and this one is read back by
-                        # the shell far more often: /usr/lib/crontab runs `calendar -' at 01:20
-                        # every morning.  0755 for the same reason lorder is -- a user types it.
-                        # IT IS HALF A PROGRAM: /usr/lib/calendar below prints the egrep pattern
-                        # for today and tomorrow and this greps with it, which is v7's own
-                        # division and is why the two live in different directories.
-                        # WHAT IT NEEDS is on this image and all of it is: egrep -f (whose EOF
-                        # bug cmd/egrep fixed, so the flag works at all), sed, test, and
-                        # /bin/mail from task C28 -- without that last the `-' arm would have
-                        # nowhere to put a letter, which is what kept this task waiting.
-                        # cmd/calendar/README.md.
-source ../../rootfs/usr/bin/calendar
-mode 0755
-
-# /lib -- WHAT cc LINKS AGAINST, and exactly that, nothing more.  crt0.o and libc.a are
-# lib/libc's, built by this same tree with these same tools; libruntime.a is the external
-# c-compiler's and is the one piece of the link that cannot come from here (it holds the
-# b$* helpers every compiled function calls).  The order on cc's command line is a
-# contract and not a preference -- b6ld scans an archive once, where it stands, and libc
-# calls the helpers while no helper calls back into libc.
-#
-# libm.a, libcurses.a and libtermcap.a are deliberately ABSENT: some 40 blocks for
-# archives nothing on this image links today, and adding one is a line in the top-level
-# CMakeLists.txt's B6_STAGE_LIB and a stanza here.
-
-file /lib/crt0.o        # the startup object, NAMED on the link line and never pulled by
-                        # symbol -- which is why it is beside libc.a and not in it, as it
-                        # is on v7.  It defines _start, the entry cc gives b6ld with -e.
+file /lib/crt0.o        # startup object, named on the link line
 source ../../rootfs/lib/crt0.o
 mode 0644
 
-file /lib/libc.a        # this tree's C library, index and all -- and the machine can now
-                        # rebuild it from its own objects with /usr/bin/ar and
-                        # /usr/bin/ranlib, byte for byte (task C9d).
+file /lib/libc.a        # the C library
 source ../../rootfs/lib/libc.a
 mode 0644
 
-file /lib/libruntime.a  # the external c-compiler's b$* helpers.  The one file on this
-                        # disk that this repository does not build.
+file /lib/libruntime.a  # the external c-compiler's b$* helpers
 source ../../rootfs/lib/libruntime.a
 mode 0644
 
-# /usr/include -- THE ONE SYSTEM HEADER TREE, in the two halves include/README.md
-# describes.  The first 59 are this repo's own, staged from the source tree; the last ten
-# are the freestanding headers the external c-compiler defines and installs, and are here
-# because no <stddef.h> means no <stdio.h> either.  cc appends this directory to every
-# preprocessor run unless -nostdinc.
+# ---- character devices -----------------------------------------------------------
 #
-# They are listed one by one because this manifest is kept by hand and b6fsutil has no
-# recursive directive; the list they must match is B6_STAGE_INC / B6_STAGE_FREEINC in the
-# top-level CMakeLists.txt, and root.img depends on every one of them.
-
-file /usr/include/assert.h
-source ../../rootfs/usr/include/assert.h
-mode 0644
-
-file /usr/include/ctype.h
-source ../../rootfs/usr/include/ctype.h
-mode 0644
-
-file /usr/include/curses.h
-source ../../rootfs/usr/include/curses.h
-mode 0644
-
-file /usr/include/dirent.h
-source ../../rootfs/usr/include/dirent.h
-mode 0644
-
-file /usr/include/errno.h
-source ../../rootfs/usr/include/errno.h
-mode 0644
-
-file /usr/include/fcntl.h
-source ../../rootfs/usr/include/fcntl.h
-mode 0644
-
-file /usr/include/fenv.h
-source ../../rootfs/usr/include/fenv.h
-mode 0644
-
-file /usr/include/grp.h
-source ../../rootfs/usr/include/grp.h
-mode 0644
-
-file /usr/include/inttypes.h
-source ../../rootfs/usr/include/inttypes.h
-mode 0644
-
-file /usr/include/locale.h
-source ../../rootfs/usr/include/locale.h
-mode 0644
-
-file /usr/include/math.h
-source ../../rootfs/usr/include/math.h
-mode 0644
-
-file /usr/include/pwd.h
-source ../../rootfs/usr/include/pwd.h
-mode 0644
-
-file /usr/include/setjmp.h
-source ../../rootfs/usr/include/setjmp.h
-mode 0644
-
-file /usr/include/sgtty.h
-source ../../rootfs/usr/include/sgtty.h
-mode 0644
-
-file /usr/include/signal.h
-source ../../rootfs/usr/include/signal.h
-mode 0644
-
-file /usr/include/stdio.h
-source ../../rootfs/usr/include/stdio.h
-mode 0644
-
-file /usr/include/stdlib.h
-source ../../rootfs/usr/include/stdlib.h
-mode 0644
-
-file /usr/include/string.h
-source ../../rootfs/usr/include/string.h
-mode 0644
-
-file /usr/include/term.h
-source ../../rootfs/usr/include/term.h
-mode 0644
-
-file /usr/include/tgmath.h
-source ../../rootfs/usr/include/tgmath.h
-mode 0644
-
-file /usr/include/time.h
-source ../../rootfs/usr/include/time.h
-mode 0644
-
-file /usr/include/uchar.h
-source ../../rootfs/usr/include/uchar.h
-mode 0644
-
-file /usr/include/unctrl.h
-source ../../rootfs/usr/include/unctrl.h
-mode 0644
-
-file /usr/include/unistd.h
-source ../../rootfs/usr/include/unistd.h
-mode 0644
-
-file /usr/include/utmp.h
-source ../../rootfs/usr/include/utmp.h
-mode 0644
-
-file /usr/include/varargs.h
-source ../../rootfs/usr/include/varargs.h
-mode 0644
-
-file /usr/include/wchar.h
-source ../../rootfs/usr/include/wchar.h
-mode 0644
-
-file /usr/include/wctype.h
-source ../../rootfs/usr/include/wctype.h
-mode 0644
-
-# ...and the freestanding ten, the external compiler's.
-
-file /usr/include/besm6.h
-source ../../rootfs/usr/include/besm6.h
-mode 0644
-
-file /usr/include/float.h
-source ../../rootfs/usr/include/float.h
-mode 0644
-
-file /usr/include/iso646.h
-source ../../rootfs/usr/include/iso646.h
-mode 0644
-
-file /usr/include/limits.h
-source ../../rootfs/usr/include/limits.h
-mode 0644
-
-file /usr/include/stdalign.h
-source ../../rootfs/usr/include/stdalign.h
-mode 0644
-
-file /usr/include/stdarg.h
-source ../../rootfs/usr/include/stdarg.h
-mode 0644
-
-file /usr/include/stdbool.h
-source ../../rootfs/usr/include/stdbool.h
-mode 0644
-
-file /usr/include/stddef.h
-source ../../rootfs/usr/include/stddef.h
-mode 0644
-
-file /usr/include/stdint.h
-source ../../rootfs/usr/include/stdint.h
-mode 0644
-
-file /usr/include/stdnoreturn.h
-source ../../rootfs/usr/include/stdnoreturn.h
-mode 0644
-
-# sys/, the kernel's own half of the tree.
-
-file /usr/include/sys/acct.h
-source ../../rootfs/usr/include/sys/acct.h
-mode 0644
-
-file /usr/include/sys/besm6dev.h
-source ../../rootfs/usr/include/sys/besm6dev.h
-mode 0644
-
-file /usr/include/sys/besm6disk.h
-source ../../rootfs/usr/include/sys/besm6disk.h
-mode 0644
-
-file /usr/include/sys/buf.h
-source ../../rootfs/usr/include/sys/buf.h
-mode 0644
-
-file /usr/include/sys/callo.h
-source ../../rootfs/usr/include/sys/callo.h
-mode 0644
-
-file /usr/include/sys/conf.h
-source ../../rootfs/usr/include/sys/conf.h
-mode 0644
-
-file /usr/include/sys/dir.h
-source ../../rootfs/usr/include/sys/dir.h
-mode 0644
-
-file /usr/include/sys/errno.h
-source ../../rootfs/usr/include/sys/errno.h
-mode 0644
-
-file /usr/include/sys/fblk.h
-source ../../rootfs/usr/include/sys/fblk.h
-mode 0644
-
-file /usr/include/sys/file.h
-source ../../rootfs/usr/include/sys/file.h
-mode 0644
-
-file /usr/include/sys/filsys.h
-source ../../rootfs/usr/include/sys/filsys.h
-mode 0644
-
-file /usr/include/sys/ino.h
-source ../../rootfs/usr/include/sys/ino.h
-mode 0644
-
-file /usr/include/sys/inode.h
-source ../../rootfs/usr/include/sys/inode.h
-mode 0644
-
-file /usr/include/sys/kctl.h
-source ../../rootfs/usr/include/sys/kctl.h
-mode 0644
-
-file /usr/include/sys/map.h
-source ../../rootfs/usr/include/sys/map.h
-mode 0644
-
-file /usr/include/sys/mount.h
-source ../../rootfs/usr/include/sys/mount.h
-mode 0644
-
-file /usr/include/sys/param.h
-source ../../rootfs/usr/include/sys/param.h
-mode 0644
-
-file /usr/include/sys/proc.h
-source ../../rootfs/usr/include/sys/proc.h
-mode 0644
-
-file /usr/include/sys/reg.h
-source ../../rootfs/usr/include/sys/reg.h
-mode 0644
-
-file /usr/include/sys/signal.h
-source ../../rootfs/usr/include/sys/signal.h
-mode 0644
-
-file /usr/include/sys/stat.h
-source ../../rootfs/usr/include/sys/stat.h
-mode 0644
-
-file /usr/include/sys/syscall.h
-source ../../rootfs/usr/include/sys/syscall.h
-mode 0644
-
-file /usr/include/sys/systm.h
-source ../../rootfs/usr/include/sys/systm.h
-mode 0644
-
-file /usr/include/sys/text.h
-source ../../rootfs/usr/include/sys/text.h
-mode 0644
-
-file /usr/include/sys/timeb.h
-source ../../rootfs/usr/include/sys/timeb.h
-mode 0644
-
-file /usr/include/sys/times.h
-source ../../rootfs/usr/include/sys/times.h
-mode 0644
-
-file /usr/include/sys/tty.h
-source ../../rootfs/usr/include/sys/tty.h
-mode 0644
-
-file /usr/include/sys/ttyio.h
-source ../../rootfs/usr/include/sys/ttyio.h
-mode 0644
-
-file /usr/include/sys/types.h
-source ../../rootfs/usr/include/sys/types.h
-mode 0644
-
-file /usr/include/sys/user.h
-source ../../rootfs/usr/include/sys/user.h
-mode 0644
-
-file /usr/include/sys/wait.h
-source ../../rootfs/usr/include/sys/wait.h
-mode 0644
-
-# /usr/man -- THE MANUAL, all two hundred pages of it, in the dialect
-# doc/Manual_Page_Format.md describes.  Each page still lives beside the source it documents
-# (cmd/README.md §10) and this is a COPY of it, so an edit to cmd/ls/ls.1.umm is on the disk
-# with no install -- the rule /usr/include above is staged by.  The layout is v7's: the
-# section DIGIT picks the directory, the subsection letter stays on the FILE, the .umm
-# suffix is dropped.  man1/fsck.1m, man3/stdio.3s, man3/exp.3m.
-#
-# They are listed one by one for /usr/include's reason -- this manifest is kept by hand and
-# b6fsutil has no recursive directive -- and the list they must match is B6_STAGE_MAN in the
-# top-level CMakeLists.txt.  Comparing the two is a `diff' of this file's source lines
-# against that glob, and it is worth running after any page is renamed or deleted, since a
-# copy_if_different stages but never removes.
-#
-# IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
-# leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  TWO OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac and sa; crypt and makekey landed with task C19, update with C20, at with
-# C21, cron with C22, mail with C28 and calendar with C23.  The two that are left are in
-# cmd/README.md's "Not ported, and why" table and will never have a program, which is v7's own
-# habit -- a manual page is where a decision about a program is recorded whether or not the
-# program exists.  mail was in that table too until C28 read the preamble that says each row
-# can be re-examined.  THE CLAIM THAT A PAGE IS ALREADY CORRECT WHEN THE PROGRAM LANDS DID NOT
-# SURVIVE: calendar.1 needed three corrections when C23 arrived, the database it now falls
-# back to being something v7 had not got.
-#
-# WHAT READS THEM is /usr/bin/man below, which finds the file, and /usr/bin/manview beside
-# it, which formats what man found.  THEY ARE STAGED AS SOURCES AND NOT PREFORMATTED, which is
-# what the dialect is for and is why `man - ls' can show one at all: nothing on this disk is a
-# cat? directory.  The one thing man needs of the layout here is that the section digit is the
-# directory and the subsection letter is on the file -- `man 3 stdio' probes man3/stdio.3,
-# .3s, .3m and .3x in that order.
-
-file /usr/man/man1/ac.1m
-source ../../rootfs/usr/man/man1/ac.1m
-mode 0644
-
-file /usr/man/man1/at.1
-source ../../rootfs/usr/man/man1/at.1
-mode 0644
-
-file /usr/man/man1/awk.1
-source ../../rootfs/usr/man/man1/awk.1
-mode 0644
-
-file /usr/man/man1/basename.1
-source ../../rootfs/usr/man/man1/basename.1
-mode 0644
-
-file /usr/man/man1/bc.1
-source ../../rootfs/usr/man/man1/bc.1
-mode 0644
-
-file /usr/man/man1/cal.1
-source ../../rootfs/usr/man/man1/cal.1
-mode 0644
-
-file /usr/man/man1/calendar.1
-source ../../rootfs/usr/man/man1/calendar.1
-mode 0644
-
-file /usr/man/man1/cat.1
-source ../../rootfs/usr/man/man1/cat.1
-mode 0644
-
-file /usr/man/man1/chmod.1
-source ../../rootfs/usr/man/man1/chmod.1
-mode 0644
-
-file /usr/man/man1/chown.1
-source ../../rootfs/usr/man/man1/chown.1
-mode 0644
-
-file /usr/man/man1/clri.1m
-source ../../rootfs/usr/man/man1/clri.1m
-mode 0644
-
-file /usr/man/man1/cmp.1
-source ../../rootfs/usr/man/man1/cmp.1
-mode 0644
-
-file /usr/man/man1/col.1
-source ../../rootfs/usr/man/man1/col.1
-mode 0644
-
-file /usr/man/man1/comm.1
-source ../../rootfs/usr/man/man1/comm.1
-mode 0644
-
-file /usr/man/man1/cp.1
-source ../../rootfs/usr/man/man1/cp.1
-mode 0644
-
-file /usr/man/man1/crypt.1
-source ../../rootfs/usr/man/man1/crypt.1
-mode 0644
-
-file /usr/man/man1/date.1
-source ../../rootfs/usr/man/man1/date.1
-mode 0644
-
-file /usr/man/man1/dc.1
-source ../../rootfs/usr/man/man1/dc.1
-mode 0644
-
-file /usr/man/man1/dcheck.1m
-source ../../rootfs/usr/man/man1/dcheck.1m
-mode 0644
-
-file /usr/man/man1/dd.1
-source ../../rootfs/usr/man/man1/dd.1
-mode 0644
-
-file /usr/man/man1/df.1m
-source ../../rootfs/usr/man/man1/df.1m
-mode 0644
-
-file /usr/man/man1/diff.1
-source ../../rootfs/usr/man/man1/diff.1
-mode 0644
-
-file /usr/man/man1/dmesg.1
-source ../../rootfs/usr/man/man1/dmesg.1
-mode 0644
-
-file /usr/man/man1/du.1
-source ../../rootfs/usr/man/man1/du.1
-mode 0644
-
-file /usr/man/man1/echo.1
-source ../../rootfs/usr/man/man1/echo.1
-mode 0644
-
-file /usr/man/man1/ed.1
-source ../../rootfs/usr/man/man1/ed.1
-mode 0644
-
-file /usr/man/man1/expr.1
-source ../../rootfs/usr/man/man1/expr.1
-mode 0644
-
-file /usr/man/man1/file.1
-source ../../rootfs/usr/man/man1/file.1
-mode 0644
-
-file /usr/man/man1/find.1
-source ../../rootfs/usr/man/man1/find.1
-mode 0644
-
-file /usr/man/man1/fsck.1m
-source ../../rootfs/usr/man/man1/fsck.1m
-mode 0644
-
-file /usr/man/man1/grep.1
-source ../../rootfs/usr/man/man1/grep.1
-mode 0644
-
-# grep.1's NAME line is `grep, egrep, fgrep', as v7 wrote it, and cmd/README.md SS10 makes the
-# NAME OF THE PAGE decide where man(1) finds it -- so `man egrep' and `man fgrep' found
-# nothing.  Two links rather than two pages: no disk, and one text to keep current.
-link /usr/man/man1/egrep.1
-target /usr/man/man1/grep.1
-
-link /usr/man/man1/fgrep.1
-target /usr/man/man1/grep.1
-
-file /usr/man/man1/icheck.1m
-source ../../rootfs/usr/man/man1/icheck.1m
-mode 0644
-
-file /usr/man/man1/iostat.1m
-source ../../rootfs/usr/man/man1/iostat.1m
-mode 0644
-
-file /usr/man/man1/join.1
-source ../../rootfs/usr/man/man1/join.1
-mode 0644
-
-file /usr/man/man1/kill.1
-source ../../rootfs/usr/man/man1/kill.1
-mode 0644
-
-file /usr/man/man1/lex.1
-source ../../rootfs/usr/man/man1/lex.1
-mode 0644
-
-file /usr/man/man1/ln.1
-source ../../rootfs/usr/man/man1/ln.1
-mode 0644
-
-file /usr/man/man1/login.1
-source ../../rootfs/usr/man/man1/login.1
-mode 0644
-
-file /usr/man/man1/look.1
-source ../../rootfs/usr/man/man1/look.1
-mode 0644
-
-file /usr/man/man1/ls.1
-source ../../rootfs/usr/man/man1/ls.1
-mode 0644
-
-file /usr/man/man1/m4.1
-source ../../rootfs/usr/man/man1/m4.1
-mode 0644
-
-file /usr/man/man1/mail.1
-source ../../rootfs/usr/man/man1/mail.1
-mode 0644
-
-file /usr/man/man1/make.1
-source ../../rootfs/usr/man/man1/make.1
-mode 0644
-
-file /usr/man/man1/man.1
-source ../../rootfs/usr/man/man1/man.1
-mode 0644
-
-file /usr/man/man1/manview.1
-source ../../rootfs/usr/man/man1/manview.1
-mode 0644
-
-file /usr/man/man1/mesg.1
-source ../../rootfs/usr/man/man1/mesg.1
-mode 0644
-
-file /usr/man/man1/mkdir.1
-source ../../rootfs/usr/man/man1/mkdir.1
-mode 0644
-
-file /usr/man/man1/mkfs.1m
-source ../../rootfs/usr/man/man1/mkfs.1m
-mode 0644
-
-file /usr/man/man1/mount.1m
-source ../../rootfs/usr/man/man1/mount.1m
-mode 0644
-
-file /usr/man/man1/mv.1
-source ../../rootfs/usr/man/man1/mv.1
-mode 0644
-
-file /usr/man/man1/ncheck.1m
-source ../../rootfs/usr/man/man1/ncheck.1m
-mode 0644
-
-file /usr/man/man1/newgrp.1
-source ../../rootfs/usr/man/man1/newgrp.1
-mode 0644
-
-file /usr/man/man1/nice.1
-source ../../rootfs/usr/man/man1/nice.1
-mode 0644
-
-file /usr/man/man1/novi.1
-source ../../rootfs/usr/man/man1/novi.1
-mode 0644
-
-file /usr/man/man1/od.1
-source ../../rootfs/usr/man/man1/od.1
-mode 0644
-
-file /usr/man/man1/passwd.1
-source ../../rootfs/usr/man/man1/passwd.1
-mode 0644
-
-file /usr/man/man1/pr.1
-source ../../rootfs/usr/man/man1/pr.1
-mode 0644
-
-file /usr/man/man1/ps.1
-source ../../rootfs/usr/man/man1/ps.1
-mode 0644
-
-file /usr/man/man1/pstat.1m
-source ../../rootfs/usr/man/man1/pstat.1m
-mode 0644
-
-file /usr/man/man1/pwd.1
-source ../../rootfs/usr/man/man1/pwd.1
-mode 0644
-
-file /usr/man/man1/quot.1m
-source ../../rootfs/usr/man/man1/quot.1m
-mode 0644
-
-file /usr/man/man1/rev.1
-source ../../rootfs/usr/man/man1/rev.1
-mode 0644
-
-file /usr/man/man1/rm.1
-source ../../rootfs/usr/man/man1/rm.1
-mode 0644
-
-file /usr/man/man1/sa.1m
-source ../../rootfs/usr/man/man1/sa.1m
-mode 0644
-
-file /usr/man/man1/sed.1
-source ../../rootfs/usr/man/man1/sed.1
-mode 0644
-
-file /usr/man/man1/sh.1
-source ../../rootfs/usr/man/man1/sh.1
-mode 0644
-
-file /usr/man/man1/sleep.1
-source ../../rootfs/usr/man/man1/sleep.1
-mode 0644
-
-file /usr/man/man1/sort.1
-source ../../rootfs/usr/man/man1/sort.1
-mode 0644
-
-file /usr/man/man1/split.1
-source ../../rootfs/usr/man/man1/split.1
-mode 0644
-
-file /usr/man/man1/stty.1
-source ../../rootfs/usr/man/man1/stty.1
-mode 0644
-
-file /usr/man/man1/su.1
-source ../../rootfs/usr/man/man1/su.1
-mode 0644
-
-file /usr/man/man1/sum.1
-source ../../rootfs/usr/man/man1/sum.1
-mode 0644
-
-file /usr/man/man1/sync.1m
-source ../../rootfs/usr/man/man1/sync.1m
-mode 0644
-
-file /usr/man/man1/tail.1
-source ../../rootfs/usr/man/man1/tail.1
-mode 0644
-
-file /usr/man/man1/tar.1
-source ../../rootfs/usr/man/man1/tar.1
-mode 0644
-
-file /usr/man/man1/tee.1
-source ../../rootfs/usr/man/man1/tee.1
-mode 0644
-
-file /usr/man/man1/test.1
-source ../../rootfs/usr/man/man1/test.1
-mode 0644
-
-file /usr/man/man1/time.1
-source ../../rootfs/usr/man/man1/time.1
-mode 0644
-
-file /usr/man/man1/touch.1
-source ../../rootfs/usr/man/man1/touch.1
-mode 0644
-
-file /usr/man/man1/tr.1
-source ../../rootfs/usr/man/man1/tr.1
-mode 0644
-
-file /usr/man/man1/tsort.1
-source ../../rootfs/usr/man/man1/tsort.1
-mode 0644
-
-file /usr/man/man1/tty.1
-source ../../rootfs/usr/man/man1/tty.1
-mode 0644
-
-file /usr/man/man1/uniq.1
-source ../../rootfs/usr/man/man1/uniq.1
-mode 0644
-
-file /usr/man/man1/units.1
-source ../../rootfs/usr/man/man1/units.1
-mode 0644
-
-file /usr/man/man1/vmstat.1
-source ../../rootfs/usr/man/man1/vmstat.1
-mode 0644
-
-file /usr/man/man1/wall.1m
-source ../../rootfs/usr/man/man1/wall.1m
-mode 0644
-
-file /usr/man/man1/wc.1
-source ../../rootfs/usr/man/man1/wc.1
-mode 0644
-
-file /usr/man/man1/who.1
-source ../../rootfs/usr/man/man1/who.1
-mode 0644
-
-file /usr/man/man1/write.1
-source ../../rootfs/usr/man/man1/write.1
-mode 0644
-
-file /usr/man/man1/yacc.1
-source ../../rootfs/usr/man/man1/yacc.1
-mode 0644
-
-file /usr/man/man1/yes.1
-source ../../rootfs/usr/man/man1/yes.1
-mode 0644
-
-file /usr/man/man2/access.2
-source ../../rootfs/usr/man/man2/access.2
-mode 0644
-
-file /usr/man/man2/acct.2
-source ../../rootfs/usr/man/man2/acct.2
-mode 0644
-
-file /usr/man/man2/alarm.2
-source ../../rootfs/usr/man/man2/alarm.2
-mode 0644
-
-file /usr/man/man2/brk.2
-source ../../rootfs/usr/man/man2/brk.2
-mode 0644
-
-file /usr/man/man2/chdir.2
-source ../../rootfs/usr/man/man2/chdir.2
-mode 0644
-
-file /usr/man/man2/chmod.2
-source ../../rootfs/usr/man/man2/chmod.2
-mode 0644
-
-file /usr/man/man2/chown.2
-source ../../rootfs/usr/man/man2/chown.2
-mode 0644
-
-file /usr/man/man2/close.2
-source ../../rootfs/usr/man/man2/close.2
-mode 0644
-
-file /usr/man/man2/creat.2
-source ../../rootfs/usr/man/man2/creat.2
-mode 0644
-
-file /usr/man/man2/dup.2
-source ../../rootfs/usr/man/man2/dup.2
-mode 0644
-
-file /usr/man/man2/exec.2
-source ../../rootfs/usr/man/man2/exec.2
-mode 0644
-
-file /usr/man/man2/exit.2
-source ../../rootfs/usr/man/man2/exit.2
-mode 0644
-
-file /usr/man/man2/fork.2
-source ../../rootfs/usr/man/man2/fork.2
-mode 0644
-
-file /usr/man/man2/getpid.2
-source ../../rootfs/usr/man/man2/getpid.2
-mode 0644
-
-file /usr/man/man2/getuid.2
-source ../../rootfs/usr/man/man2/getuid.2
-mode 0644
-
-file /usr/man/man2/intro.2
-source ../../rootfs/usr/man/man2/intro.2
-mode 0644
-
-file /usr/man/man2/ioctl.2
-source ../../rootfs/usr/man/man2/ioctl.2
-mode 0644
-
-file /usr/man/man2/kctl.2
-source ../../rootfs/usr/man/man2/kctl.2
-mode 0644
-
-file /usr/man/man2/kill.2
-source ../../rootfs/usr/man/man2/kill.2
-mode 0644
-
-file /usr/man/man2/link.2
-source ../../rootfs/usr/man/man2/link.2
-mode 0644
-
-file /usr/man/man2/lock.2
-source ../../rootfs/usr/man/man2/lock.2
-mode 0644
-
-file /usr/man/man2/lseek.2
-source ../../rootfs/usr/man/man2/lseek.2
-mode 0644
-
-file /usr/man/man2/mknod.2
-source ../../rootfs/usr/man/man2/mknod.2
-mode 0644
-
-file /usr/man/man2/mount.2
-source ../../rootfs/usr/man/man2/mount.2
-mode 0644
-
-file /usr/man/man2/nice.2
-source ../../rootfs/usr/man/man2/nice.2
-mode 0644
-
-file /usr/man/man2/open.2
-source ../../rootfs/usr/man/man2/open.2
-mode 0644
-
-file /usr/man/man2/pause.2
-source ../../rootfs/usr/man/man2/pause.2
-mode 0644
-
-file /usr/man/man2/phys.2
-source ../../rootfs/usr/man/man2/phys.2
-mode 0644
-
-file /usr/man/man2/pipe.2
-source ../../rootfs/usr/man/man2/pipe.2
-mode 0644
-
-file /usr/man/man2/profil.2
-source ../../rootfs/usr/man/man2/profil.2
-mode 0644
-
-file /usr/man/man2/ptrace.2
-source ../../rootfs/usr/man/man2/ptrace.2
-mode 0644
-
-file /usr/man/man2/read.2
-source ../../rootfs/usr/man/man2/read.2
-mode 0644
-
-file /usr/man/man2/setuid.2
-source ../../rootfs/usr/man/man2/setuid.2
-mode 0644
-
-file /usr/man/man2/signal.2
-source ../../rootfs/usr/man/man2/signal.2
-mode 0644
-
-file /usr/man/man2/stat.2
-source ../../rootfs/usr/man/man2/stat.2
-mode 0644
-
-file /usr/man/man2/stime.2
-source ../../rootfs/usr/man/man2/stime.2
-mode 0644
-
-file /usr/man/man2/sync.2
-source ../../rootfs/usr/man/man2/sync.2
-mode 0644
-
-file /usr/man/man2/time.2
-source ../../rootfs/usr/man/man2/time.2
-mode 0644
-
-file /usr/man/man2/times.2
-source ../../rootfs/usr/man/man2/times.2
-mode 0644
-
-file /usr/man/man2/umask.2
-source ../../rootfs/usr/man/man2/umask.2
-mode 0644
-
-file /usr/man/man2/unlink.2
-source ../../rootfs/usr/man/man2/unlink.2
-mode 0644
-
-file /usr/man/man2/utime.2
-source ../../rootfs/usr/man/man2/utime.2
-mode 0644
-
-file /usr/man/man2/wait.2
-source ../../rootfs/usr/man/man2/wait.2
-mode 0644
-
-file /usr/man/man2/write.2
-source ../../rootfs/usr/man/man2/write.2
-mode 0644
-
-file /usr/man/man3/abort.3
-source ../../rootfs/usr/man/man3/abort.3
-mode 0644
-
-file /usr/man/man3/abs.3
-source ../../rootfs/usr/man/man3/abs.3
-mode 0644
-
-file /usr/man/man3/assert.3x
-source ../../rootfs/usr/man/man3/assert.3x
-mode 0644
-
-file /usr/man/man3/atexit.3
-source ../../rootfs/usr/man/man3/atexit.3
-mode 0644
-
-file /usr/man/man3/atof.3
-source ../../rootfs/usr/man/man3/atof.3
-mode 0644
-
-file /usr/man/man3/crypt.3
-source ../../rootfs/usr/man/man3/crypt.3
-mode 0644
-
-file /usr/man/man3/ctime.3
-source ../../rootfs/usr/man/man3/ctime.3
-mode 0644
-
-file /usr/man/man3/ctype.3
-source ../../rootfs/usr/man/man3/ctype.3
-mode 0644
-
-file /usr/man/man3/curses.3
-source ../../rootfs/usr/man/man3/curses.3
-mode 0644
-
-file /usr/man/man3/directory.3
-source ../../rootfs/usr/man/man3/directory.3
-mode 0644
-
-file /usr/man/man3/ecvt.3
-source ../../rootfs/usr/man/man3/ecvt.3
-mode 0644
-
-file /usr/man/man3/end.3
-source ../../rootfs/usr/man/man3/end.3
-mode 0644
-
-file /usr/man/man3/exp.3m
-source ../../rootfs/usr/man/man3/exp.3m
-mode 0644
-
-file /usr/man/man3/fclose.3s
-source ../../rootfs/usr/man/man3/fclose.3s
-mode 0644
-
-file /usr/man/man3/ferror.3s
-source ../../rootfs/usr/man/man3/ferror.3s
-mode 0644
-
-file /usr/man/man3/floor.3m
-source ../../rootfs/usr/man/man3/floor.3m
-mode 0644
-
-file /usr/man/man3/fopen.3s
-source ../../rootfs/usr/man/man3/fopen.3s
-mode 0644
-
-file /usr/man/man3/fread.3s
-source ../../rootfs/usr/man/man3/fread.3s
-mode 0644
-
-file /usr/man/man3/frexp.3
-source ../../rootfs/usr/man/man3/frexp.3
-mode 0644
-
-file /usr/man/man3/fseek.3s
-source ../../rootfs/usr/man/man3/fseek.3s
-mode 0644
-
-file /usr/man/man3/getc.3s
-source ../../rootfs/usr/man/man3/getc.3s
-mode 0644
-
-file /usr/man/man3/getenv.3
-source ../../rootfs/usr/man/man3/getenv.3
-mode 0644
-
-file /usr/man/man3/getgrent.3
-source ../../rootfs/usr/man/man3/getgrent.3
-mode 0644
-
-file /usr/man/man3/getlogin.3
-source ../../rootfs/usr/man/man3/getlogin.3
-mode 0644
-
-file /usr/man/man3/getpass.3
-source ../../rootfs/usr/man/man3/getpass.3
-mode 0644
-
-file /usr/man/man3/getpw.3
-source ../../rootfs/usr/man/man3/getpw.3
-mode 0644
-
-file /usr/man/man3/getpwent.3
-source ../../rootfs/usr/man/man3/getpwent.3
-mode 0644
-
-file /usr/man/man3/gets.3s
-source ../../rootfs/usr/man/man3/gets.3s
-mode 0644
-
-file /usr/man/man3/hypot.3m
-source ../../rootfs/usr/man/man3/hypot.3m
-mode 0644
-
-file /usr/man/man3/intro.3
-source ../../rootfs/usr/man/man3/intro.3
-mode 0644
-
-file /usr/man/man3/j0.3m
-source ../../rootfs/usr/man/man3/j0.3m
-mode 0644
-
-file /usr/man/man3/malloc.3
-source ../../rootfs/usr/man/man3/malloc.3
-mode 0644
-
-file /usr/man/man3/mkstemp.3
-source ../../rootfs/usr/man/man3/mkstemp.3
-mode 0644
-
-file /usr/man/man3/mktemp.3
-source ../../rootfs/usr/man/man3/mktemp.3
-mode 0644
-
-file /usr/man/man3/perror.3
-source ../../rootfs/usr/man/man3/perror.3
-mode 0644
-
-file /usr/man/man3/popen.3s
-source ../../rootfs/usr/man/man3/popen.3s
-mode 0644
-
-file /usr/man/man3/printf.3s
-source ../../rootfs/usr/man/man3/printf.3s
-mode 0644
-
-file /usr/man/man3/putc.3s
-source ../../rootfs/usr/man/man3/putc.3s
-mode 0644
-
-file /usr/man/man3/puts.3s
-source ../../rootfs/usr/man/man3/puts.3s
-mode 0644
-
-file /usr/man/man3/qsort.3
-source ../../rootfs/usr/man/man3/qsort.3
-mode 0644
-
-file /usr/man/man3/rand.3
-source ../../rootfs/usr/man/man3/rand.3
-mode 0644
-
-file /usr/man/man3/scanf.3s
-source ../../rootfs/usr/man/man3/scanf.3s
-mode 0644
-
-file /usr/man/man3/setbuf.3s
-source ../../rootfs/usr/man/man3/setbuf.3s
-mode 0644
-
-file /usr/man/man3/setjmp.3
-source ../../rootfs/usr/man/man3/setjmp.3
-mode 0644
-
-file /usr/man/man3/sin.3m
-source ../../rootfs/usr/man/man3/sin.3m
-mode 0644
-
-file /usr/man/man3/sinh.3m
-source ../../rootfs/usr/man/man3/sinh.3m
-mode 0644
-
-file /usr/man/man3/sleep.3
-source ../../rootfs/usr/man/man3/sleep.3
-mode 0644
-
-file /usr/man/man3/stdio.3s
-source ../../rootfs/usr/man/man3/stdio.3s
-mode 0644
-
-file /usr/man/man3/string.3
-source ../../rootfs/usr/man/man3/string.3
-mode 0644
-
-file /usr/man/man3/swab.3
-source ../../rootfs/usr/man/man3/swab.3
-mode 0644
-
-file /usr/man/man3/system.3
-source ../../rootfs/usr/man/man3/system.3
-mode 0644
-
-file /usr/man/man3/termcap.3
-source ../../rootfs/usr/man/man3/termcap.3
-mode 0644
-
-file /usr/man/man3/ttyname.3
-source ../../rootfs/usr/man/man3/ttyname.3
-mode 0644
-
-file /usr/man/man3/ungetc.3s
-source ../../rootfs/usr/man/man3/ungetc.3s
-mode 0644
-
-file /usr/man/man5/acct.5
-source ../../rootfs/usr/man/man5/acct.5
-mode 0644
-
-file /usr/man/man5/dir.5
-source ../../rootfs/usr/man/man5/dir.5
-mode 0644
-
-file /usr/man/man5/environ.5
-source ../../rootfs/usr/man/man5/environ.5
-mode 0644
-
-file /usr/man/man5/filsys.5
-source ../../rootfs/usr/man/man5/filsys.5
-mode 0644
-
-file /usr/man/man5/group.5
-source ../../rootfs/usr/man/man5/group.5
-mode 0644
-
-file /usr/man/man5/mtab.5
-source ../../rootfs/usr/man/man5/mtab.5
-mode 0644
-
-file /usr/man/man5/passwd.5
-source ../../rootfs/usr/man/man5/passwd.5
-mode 0644
-
-file /usr/man/man5/ttys.5
-source ../../rootfs/usr/man/man5/ttys.5
-mode 0644
-
-file /usr/man/man5/types.5
-source ../../rootfs/usr/man/man5/types.5
-mode 0644
-
-file /usr/man/man5/utmp.5
-source ../../rootfs/usr/man/man5/utmp.5
-mode 0644
-
-file /usr/man/man8/cron.8
-source ../../rootfs/usr/man/man8/cron.8
-mode 0644
-
-file /usr/man/man8/getty.8
-source ../../rootfs/usr/man/man8/getty.8
-mode 0644
-
-file /usr/man/man8/init.8
-source ../../rootfs/usr/man/man8/init.8
-mode 0644
-
-file /usr/man/man8/makekey.8
-source ../../rootfs/usr/man/man8/makekey.8
-mode 0644
-
-file /usr/man/man8/update.8
-source ../../rootfs/usr/man/man8/update.8
-mode 0644
-
-
-file /usr/lib/atrun     # cmd/atrun -- task C21, at(1)'s other half, and documented inside
-                        # at.1 rather than in a page of its own.  /usr/lib because it is not
-                        # a command a user types: /etc/cron runs it every five minutes, which
-                        # is what task C22 put on this image and is the granularity at(1)
-                        # promises.  NOT SETUID: it needs suser() for the setuid(2) that
-                        # drops to the job's owner, so root runs it -- and a bit here would
-                        # hand that same code path to anybody.  That is also why cron does
-                        # not setuid(1); cmd/at/README.md and cmd/cron/README.md.
-source ../../rootfs/usr/lib/atrun
-mode 0755
-
-file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
-                        # /usr/lib stanza above.  Its window is RANGE (30) lines of each
-                        # file, so its storage is bounded by a constant where diff's is
-                        # bounded by the input -- which is the whole reason -h exists.
-source ../../rootfs/usr/lib/diffh
-mode 0755
-
-file /usr/lib/makekey   # cmd/makekey -- task C19, and the SECOND PROGRAM ON THIS IMAGE
-                        # OUTSIDE /bin, diffh above being the first.  Ten bytes in, thirteen
-                        # out, and the transformation is crypt(3).  IT HAS NO CALLER HERE
-                        # and that is deliberate: v7's crypt(1) and ed(1) forked it because
-                        # the DES code shipped separately, and cmd/crypt/rotor.c calls
-                        # crypt(3) instead.  It is on the image as the filter makekey.8
-                        # describes, for anything a user writes.  NOT SETUID: it holds no
-                        # secret of its own.
-source ../../rootfs/usr/lib/makekey
-mode 0755
-
-file /usr/lib/calendar  # cmd/calendar -- task C23, and the other half of /usr/bin/calendar
-                        # above.  It prints nothing but an egrep -f pattern: today's date and
-                        # tomorrow's, in every spelling v7 recognised, and on a Friday it
-                        # reaches through to Monday.  /usr/lib because a user never runs it.
-                        # ITS PATTERN IS NOT v7's, by one character: v7 wrote `%d/' for the
-                        # month and `0*%d' for the day, so 01/06 matched nothing in January
-                        # while 10/18 matched in October -- and every line of the database
-                        # below is zero-padded.  cmd/calendar/README.md.
-                        # NOT SETUID: it reads the clock and writes standard output.
-source ../../rootfs/usr/lib/calendar
-mode 0755
-
-file /usr/lib/crontab   # cmd/cron's schedule -- task C22, and the FIFTH entry in /usr/lib
-                        # that is not a program: data read by /etc/cron above, hence 0644.
-                        # 0644 AND ROOT'S IS THE WHOLE SECURITY ARGUMENT for cron running as
-                        # root: nobody but root can put a command in this file.  v7's three
-                        # lines, ONE OF THEM COMMENTED OUT -- dmesg wants a /usr/adm this image
-                        # deliberately has not got -- so at(1) jobs are collected every five
-                        # minutes and `calendar -' runs at 01:20, the second line having gone
-                        # live with task C23.  A line cron cannot parse is dropped in silence,
-                        # which is what makes a `#' comment work.  Same bytes as
-                        # cmd/cron/crontab.
-source ../../rootfs/usr/lib/crontab
-mode 0644
-
-file /usr/lib/units     # cmd/units's conversion table -- task C18, and the FOURTH entry in
-                        # /usr/lib that is not a program: data read by /bin/units above, hence
-                        # 0644.  v7's file unchanged but for SIX DEFINITIONS COMMENTED OUT --
-                        # mole, atomicmassunit, amu, barn, dalton and k -- whose values fall
-                        # outside a BESM-6 floating word (5.42e-20 .. 9.22e+18).  Nothing else
-                        # in the file refers to any of them, so 421 of v7's 427 definitions
-                        # survive and the six read as `cannot recognize'.  Commented rather
-                        # than deleted so the file still says what this machine cost.
-                        # Same bytes as cmd/units/units.
-source ../../rootfs/usr/lib/units
-mode 0644
-
-file /usr/lib/lib.b     # cmd/bc's math library -- task C16, and the THIRD entry in /usr/lib
-                        # that is not a program: a bc program, read by /bin/bc when -l is
-                        # given, hence 0644.  s, c, e, l, a and j, as bc.1 lists them.  No
-                        # copy of it reached this tree with the rest of cmd/bc, so this one
-                        # is 2.11BSD's share/misc/lib.b, `lib.b 4.1 83/04/02', which is the
-                        # Bell original unchanged.  Same bytes as cmd/bc/lib.b.
-source ../../rootfs/usr/lib/lib.b
-mode 0644
-
-file /usr/lib/yaccpar   # cmd/yacc's parser skeleton -- task C10c, and THE FIRST ENTRY IN
-                        # /usr/lib THAT IS NOT A PROGRAM.  /usr/bin/yacc copies it verbatim
-                        # into every y.tab.c, splicing the actions at its single `$A' marker:
-                        # data to yacc, C source to whatever compiles the result, hence 0644.
-                        # find_parser()'s `besm6' arm names this exact path and has no second
-                        # candidate, so without it yacc builds every table and dies at the
-                        # last step.  Same bytes as cmd/yacc/yaccpar.c.
-source ../../rootfs/usr/lib/yaccpar
-mode 0644
-
-# ...and the second, in a subdirectory of its own because that is where find_form() looks.
-dir /usr/lib/lex
-
-file /usr/lib/lex/ncform # cmd/lex's scanner skeleton -- task C10d, and the SECOND entry in
-                        # /usr/lib that is not a program.  /usr/bin/lex appends it verbatim to
-                        # every lex.yy.c, after the tables and the scanner's own subroutines:
-                        # data to lex, C source to whatever compiles the result, hence 0644.
-                        # find_form()'s `besm6' arm names this exact path and has no second
-                        # candidate, so without it lex builds every table and dies at the last
-                        # step -- which is what cmd_lex_noskel asserts.  It carries
-                        # yyreject(), yyracc() and yyless() for every scanner, so `cc
-                        # lex.yy.c' is the whole recipe and there is no libl.a here.
-                        # Same bytes as cmd/lex/ncform.
-source ../../rootfs/usr/lib/lex/ncform
-mode 0644
-
-# calendar(1)'s DATABASE, task C23, in the /usr/lib/calendars directory declared at the top of
-# this file: eight files and twenty-nine blocks, which is the largest single body of data on the
-# image after the manual and was decided by MEASUREMENT rather than by taste.  A subset of four
-# holds entries for 114 days of the year and all eight for 362, and /usr/bin/calendar falls back
-# to these when the current directory has no `calendar' -- so a subset would have left the
-# fallback silent two days in three.  0644, and v7's successors' text unaltered: every line is
-# `MM/DD<tab>text' with the month zero-padded, which is what /usr/lib/calendar's one deviation
-# from v7 is for.  cmd/calendar/README.md.
-
-file /usr/lib/calendars/calendar.birthday
-source ../../rootfs/usr/lib/calendars/calendar.birthday
-mode 0644
-
-file /usr/lib/calendars/calendar.christian
-source ../../rootfs/usr/lib/calendars/calendar.christian
-mode 0644
-
-file /usr/lib/calendars/calendar.computer
-source ../../rootfs/usr/lib/calendars/calendar.computer
-mode 0644
-
-file /usr/lib/calendars/calendar.history
-source ../../rootfs/usr/lib/calendars/calendar.history
-mode 0644
-
-file /usr/lib/calendars/calendar.holiday
-source ../../rootfs/usr/lib/calendars/calendar.holiday
-mode 0644
-
-file /usr/lib/calendars/calendar.judaic
-source ../../rootfs/usr/lib/calendars/calendar.judaic
-mode 0644
-
-file /usr/lib/calendars/calendar.music
-source ../../rootfs/usr/lib/calendars/calendar.music
-mode 0644
-
-file /usr/lib/calendars/calendar.usholiday
-source ../../rootfs/usr/lib/calendars/calendar.usholiday
-mode 0644
-
-file /usr/dict/words     # cmd/look -- task C5b.  Sorted in BYTE order, which is the order look
-                        # compares in: char is unsigned here, so every Cyrillic entry
-                        # follows every ASCII one.  `LC_ALL=C sort -c words' is the check.
-source ../../rootfs/usr/dict/words
-mode 0644
-
-# ---- character devices ----------------------------------------------------------
-
-cdev /dev/console       # cdevsw[0] minor 0: the operator's console, dev/sc.c
+# Major numbers are the row index in cdevsw[] / bdevsw[]; kernel/conf.c is the authority.
+# A disk minor is a flat drive index, identical to the simulator's unit subscript, so
+# /dev/md1 is SIMH's md01.
+
+cdev /dev/console       # cdevsw[0] minor 0: the operator's Consul, dev/sc.c
 major 0
 minor 0
 mode 0622
 
-# The same device as /dev/console, under the name /etc/ttys and getty use.  A SEPARATE
-# INODE, not a link, and that is deliberate: ttyname(3) (lib/libc/gen/ttyname.c) scans
-# /dev matching the I-NUMBER, so each name reports itself.  One inode under two names
-# would make the answer depend on directory order.
-cdev /dev/tty0          # cdevsw[0] minor 0: Consul 1, again
+cdev /dev/tty0          # the same device, under the name /etc/ttys uses; a separate inode
 major 0
 minor 0
 mode 0622
 
-cdev /dev/tty1          # cdevsw[0] minor 1: Consul 2, the second terminal
+cdev /dev/tty1          # cdevsw[0] minor 1: the second Consul
 major 0
 minor 1
 mode 0622
@@ -2728,14 +505,44 @@ major 2
 minor 0
 mode 0666
 
-cdev /dev/rmd0          # cdevsw[3]: the raw disk, dev/md.c
+cdev /dev/rmd0          # cdevsw[3] minor 0: the raw root disk, dev/md.c
 major 3
 minor 0
 mode 0600
 
-cdev /dev/rmd1          # cdevsw[3] minor 1: the SECOND drive -- SIMH's md01
+cdev /dev/rmd1          # cdevsw[3] minor 1: the raw /usr pack -- what /etc/rc fscks
 major 3
 minor 1
+mode 0600
+
+cdev /dev/rmd2          # cdevsw[3] minor 2: reserved for /tmp
+major 3
+minor 2
+mode 0600
+
+cdev /dev/rmd3          # cdevsw[3] minor 3: reserved for /home
+major 3
+minor 3
+mode 0600
+
+cdev /dev/rmd4          # cdevsw[3] minor 4: unassigned
+major 3
+minor 4
+mode 0600
+
+cdev /dev/rmd5          # cdevsw[3] minor 5: unassigned
+major 3
+minor 5
+mode 0600
+
+cdev /dev/rmd6          # cdevsw[3] minor 6: unassigned
+major 3
+minor 6
+mode 0600
+
+cdev /dev/rmd7          # cdevsw[3] minor 7: the test pack
+major 3
+minor 7
 mode 0600
 
 cdev /dev/rmb0          # cdevsw[4]: the raw drum, dev/mb.c
@@ -2743,52 +550,48 @@ major 4
 minor 0
 mode 0600
 
-# ---- block devices --------------------------------------------------------------
+# ---- block devices ---------------------------------------------------------------
+#
+# Eight drives since NMOUNT went from 2 to 8, and every one has a raw twin above:
+# without the nodes to name them that is capacity nothing can reach, and mknod on a
+# running system does not survive the image being rebuilt.
 
-bdev /dev/md0           # bdevsw[0]: the root disk -- rootdev = makedev(0, 0)
+bdev /dev/md0           # bdevsw[0] minor 0: the root -- rootdev = makedev(0, 0)
 major 0
 minor 0
 mode 0600
 
-# THE TEST PACK'S DRIVE (test.manifest), and the only one besides the root that anything
-# attaches.  Mode 0600 and root's IS the whole privilege story for mount(1M), which is not
-# setuid: mount(2) calls no suser() and gates on the mode of the special file, as v7 did.  It
-# must be the BLOCK node -- getmdev() insists on IFBLK, so /dev/rmd1 answers ENOTBLK.
-bdev /dev/md1           # bdevsw[0] minor 1: the second drive, for mount(1M) -- task C4f
+bdev /dev/md1           # bdevsw[0] minor 1: /usr, mounted by /etc/rc
 major 0
 minor 1
 mode 0600
 
-bdev /dev/md2           # bdevsw[0] minor 2: the third drive -- SIMH's md02
+bdev /dev/md2           # bdevsw[0] minor 2: reserved for /tmp
 major 0
 minor 2
 mode 0600
 
-# THE REST OF THE MOUNT TABLE.  NMOUNT is 8 and the root holds mount[0], so these five plus
-# md1 and md2 are the seven drives that can be mounted at once.  Nothing attaches any of them
-# today, which costs nothing (see the header above) and is the only way to have them at all --
-# a `mknod' on a running system does not survive the image being rebuilt.
-bdev /dev/md3           # bdevsw[0] minor 3: SIMH's md03
+bdev /dev/md3           # bdevsw[0] minor 3: reserved for /home
 major 0
 minor 3
 mode 0600
 
-bdev /dev/md4           # bdevsw[0] minor 4: SIMH's md04
+bdev /dev/md4           # bdevsw[0] minor 4: unassigned
 major 0
 minor 4
 mode 0600
 
-bdev /dev/md5           # bdevsw[0] minor 5: SIMH's md05
+bdev /dev/md5           # bdevsw[0] minor 5: unassigned
 major 0
 minor 5
 mode 0600
 
-bdev /dev/md6           # bdevsw[0] minor 6: SIMH's md06
+bdev /dev/md6           # bdevsw[0] minor 6: unassigned
 major 0
 minor 6
 mode 0600
 
-bdev /dev/md7           # bdevsw[0] minor 7: SIMH's md07
+bdev /dev/md7           # bdevsw[0] minor 7: the test pack, mounted by hand on /mnt
 major 0
 minor 7
 mode 0600

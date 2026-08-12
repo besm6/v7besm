@@ -1,0 +1,1290 @@
+# The /usr pack: what `b6fsutil -n -M' builds into usr.img and `-S' converts into
+# usr3100.disk, attached as md01.  Grammar: cmd/fsutil/README.md.
+#
+# THE PACK'S ROOT IS WHAT APPEARS AT /usr, so every path here is one component shorter
+# than the path it has on the running machine: /bin/cpp below is /usr/bin/cpp once
+# mounted.  Comments still name the mounted path.
+#
+# /etc/rc fscks it and mounts it read-write on /dev/md1, before `date'.  Read-write
+# because /spool/at and /spool/mail are written at run time; kernel/test/multi therefore
+# converts a writable copy of its own, as it already does for the root.
+#
+# `source' resolves against b6fsutil's working directory, build/kernel/test, so
+# ../../rootfs/usr is the ROOT's staging tree -- shared, unlike the test pack's.
+#
+# The dependency list is USRFS_FILES in kernel/test/CMakeLists.txt, and for /include and
+# /man the B6_STAGE_INC / B6_STAGE_FREEINC / B6_STAGE_MAN lists in the top-level
+# CMakeLists.txt.  Adding a file means editing both.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /lost+found         # fsck reconnects here; it cannot create the directory itself
+
+dir /bin
+dir /include
+dir /include/sys
+dir /lib
+dir /lib/calendars
+dir /dict
+dir /man
+dir /man/man1
+dir /man/man2
+dir /man/man3
+dir /man/man5
+dir /man/man8
+dir /spool
+dir /spool/at
+mode 0777
+dir /spool/at/past
+mode 0777
+dir /spool/mail
+
+# ---- /usr/bin -- the toolchain ---------------------------------------------------
+
+file /bin/cpp           # C preprocessor
+source ../../rootfs/usr/bin/cpp
+mode 0755
+
+file /bin/as            # assembler
+source ../../rootfs/usr/bin/as
+mode 0755
+
+file /bin/ld            # link editor
+source ../../rootfs/usr/bin/ld
+mode 0755
+
+file /bin/nm            # print name list
+source ../../rootfs/usr/bin/nm
+mode 0755
+
+file /bin/size          # size of an object file
+source ../../rootfs/usr/bin/size
+mode 0755
+
+file /bin/strip         # remove symbols from an object file
+source ../../rootfs/usr/bin/strip
+mode 0755
+
+file /bin/disasm        # disassembler
+source ../../rootfs/usr/bin/disasm
+mode 0755
+
+file /bin/lorder        # find ordering relation for an object library
+source ../../rootfs/usr/bin/lorder
+mode 0755
+
+file /bin/ar            # archive and library maintainer
+source ../../rootfs/usr/bin/ar
+mode 0755
+
+file /bin/ranlib        # convert archives to random libraries
+source ../../rootfs/usr/bin/ranlib
+mode 0755
+
+file /bin/cc            # C compiler driver; cannot compile C on this machine
+source ../../rootfs/usr/bin/cc
+mode 0755
+
+file /bin/yacc          # yet another compiler-compiler
+source ../../rootfs/usr/bin/yacc
+mode 0755
+
+file /bin/lex           # generator of lexical analysis programs
+source ../../rootfs/usr/bin/lex
+mode 0755
+
+file /bin/man           # print out the manual
+source ../../rootfs/usr/bin/man
+mode 0755
+
+file /bin/manview       # format a manual page
+source ../../rootfs/usr/bin/manview
+mode 0755
+
+file /bin/calendar      # reminder service
+source ../../rootfs/usr/bin/calendar
+mode 0755
+
+# ---- /usr/include ----------------------------------------------------------------
+
+file /include/assert.h
+source ../../rootfs/usr/include/assert.h
+mode 0644
+
+file /include/ctype.h
+source ../../rootfs/usr/include/ctype.h
+mode 0644
+
+file /include/curses.h
+source ../../rootfs/usr/include/curses.h
+mode 0644
+
+file /include/dirent.h
+source ../../rootfs/usr/include/dirent.h
+mode 0644
+
+file /include/errno.h
+source ../../rootfs/usr/include/errno.h
+mode 0644
+
+file /include/fcntl.h
+source ../../rootfs/usr/include/fcntl.h
+mode 0644
+
+file /include/fenv.h
+source ../../rootfs/usr/include/fenv.h
+mode 0644
+
+file /include/grp.h
+source ../../rootfs/usr/include/grp.h
+mode 0644
+
+file /include/inttypes.h
+source ../../rootfs/usr/include/inttypes.h
+mode 0644
+
+file /include/locale.h
+source ../../rootfs/usr/include/locale.h
+mode 0644
+
+file /include/math.h
+source ../../rootfs/usr/include/math.h
+mode 0644
+
+file /include/pwd.h
+source ../../rootfs/usr/include/pwd.h
+mode 0644
+
+file /include/setjmp.h
+source ../../rootfs/usr/include/setjmp.h
+mode 0644
+
+file /include/sgtty.h
+source ../../rootfs/usr/include/sgtty.h
+mode 0644
+
+file /include/signal.h
+source ../../rootfs/usr/include/signal.h
+mode 0644
+
+file /include/stdio.h
+source ../../rootfs/usr/include/stdio.h
+mode 0644
+
+file /include/stdlib.h
+source ../../rootfs/usr/include/stdlib.h
+mode 0644
+
+file /include/string.h
+source ../../rootfs/usr/include/string.h
+mode 0644
+
+file /include/term.h
+source ../../rootfs/usr/include/term.h
+mode 0644
+
+file /include/tgmath.h
+source ../../rootfs/usr/include/tgmath.h
+mode 0644
+
+file /include/time.h
+source ../../rootfs/usr/include/time.h
+mode 0644
+
+file /include/uchar.h
+source ../../rootfs/usr/include/uchar.h
+mode 0644
+
+file /include/unctrl.h
+source ../../rootfs/usr/include/unctrl.h
+mode 0644
+
+file /include/unistd.h
+source ../../rootfs/usr/include/unistd.h
+mode 0644
+
+file /include/utmp.h
+source ../../rootfs/usr/include/utmp.h
+mode 0644
+
+file /include/varargs.h
+source ../../rootfs/usr/include/varargs.h
+mode 0644
+
+file /include/wchar.h
+source ../../rootfs/usr/include/wchar.h
+mode 0644
+
+file /include/wctype.h
+source ../../rootfs/usr/include/wctype.h
+mode 0644
+
+file /include/besm6.h
+source ../../rootfs/usr/include/besm6.h
+mode 0644
+
+file /include/float.h
+source ../../rootfs/usr/include/float.h
+mode 0644
+
+file /include/iso646.h
+source ../../rootfs/usr/include/iso646.h
+mode 0644
+
+file /include/limits.h
+source ../../rootfs/usr/include/limits.h
+mode 0644
+
+file /include/stdalign.h
+source ../../rootfs/usr/include/stdalign.h
+mode 0644
+
+file /include/stdarg.h
+source ../../rootfs/usr/include/stdarg.h
+mode 0644
+
+file /include/stdbool.h
+source ../../rootfs/usr/include/stdbool.h
+mode 0644
+
+file /include/stddef.h
+source ../../rootfs/usr/include/stddef.h
+mode 0644
+
+file /include/stdint.h
+source ../../rootfs/usr/include/stdint.h
+mode 0644
+
+file /include/stdnoreturn.h
+source ../../rootfs/usr/include/stdnoreturn.h
+mode 0644
+
+file /include/sys/acct.h
+source ../../rootfs/usr/include/sys/acct.h
+mode 0644
+
+file /include/sys/besm6dev.h
+source ../../rootfs/usr/include/sys/besm6dev.h
+mode 0644
+
+file /include/sys/besm6disk.h
+source ../../rootfs/usr/include/sys/besm6disk.h
+mode 0644
+
+file /include/sys/buf.h
+source ../../rootfs/usr/include/sys/buf.h
+mode 0644
+
+file /include/sys/callo.h
+source ../../rootfs/usr/include/sys/callo.h
+mode 0644
+
+file /include/sys/conf.h
+source ../../rootfs/usr/include/sys/conf.h
+mode 0644
+
+file /include/sys/dir.h
+source ../../rootfs/usr/include/sys/dir.h
+mode 0644
+
+file /include/sys/errno.h
+source ../../rootfs/usr/include/sys/errno.h
+mode 0644
+
+file /include/sys/fblk.h
+source ../../rootfs/usr/include/sys/fblk.h
+mode 0644
+
+file /include/sys/file.h
+source ../../rootfs/usr/include/sys/file.h
+mode 0644
+
+file /include/sys/filsys.h
+source ../../rootfs/usr/include/sys/filsys.h
+mode 0644
+
+file /include/sys/ino.h
+source ../../rootfs/usr/include/sys/ino.h
+mode 0644
+
+file /include/sys/inode.h
+source ../../rootfs/usr/include/sys/inode.h
+mode 0644
+
+file /include/sys/kctl.h
+source ../../rootfs/usr/include/sys/kctl.h
+mode 0644
+
+file /include/sys/map.h
+source ../../rootfs/usr/include/sys/map.h
+mode 0644
+
+file /include/sys/mount.h
+source ../../rootfs/usr/include/sys/mount.h
+mode 0644
+
+file /include/sys/param.h
+source ../../rootfs/usr/include/sys/param.h
+mode 0644
+
+file /include/sys/proc.h
+source ../../rootfs/usr/include/sys/proc.h
+mode 0644
+
+file /include/sys/reg.h
+source ../../rootfs/usr/include/sys/reg.h
+mode 0644
+
+file /include/sys/signal.h
+source ../../rootfs/usr/include/sys/signal.h
+mode 0644
+
+file /include/sys/stat.h
+source ../../rootfs/usr/include/sys/stat.h
+mode 0644
+
+file /include/sys/syscall.h
+source ../../rootfs/usr/include/sys/syscall.h
+mode 0644
+
+file /include/sys/systm.h
+source ../../rootfs/usr/include/sys/systm.h
+mode 0644
+
+file /include/sys/text.h
+source ../../rootfs/usr/include/sys/text.h
+mode 0644
+
+file /include/sys/timeb.h
+source ../../rootfs/usr/include/sys/timeb.h
+mode 0644
+
+file /include/sys/times.h
+source ../../rootfs/usr/include/sys/times.h
+mode 0644
+
+file /include/sys/tty.h
+source ../../rootfs/usr/include/sys/tty.h
+mode 0644
+
+file /include/sys/ttyio.h
+source ../../rootfs/usr/include/sys/ttyio.h
+mode 0644
+
+file /include/sys/types.h
+source ../../rootfs/usr/include/sys/types.h
+mode 0644
+
+file /include/sys/user.h
+source ../../rootfs/usr/include/sys/user.h
+mode 0644
+
+file /include/sys/wait.h
+source ../../rootfs/usr/include/sys/wait.h
+mode 0644
+
+# ---- /usr/man --------------------------------------------------------------------
+
+file /man/man1/ac.1m
+source ../../rootfs/usr/man/man1/ac.1m
+mode 0644
+
+file /man/man1/at.1
+source ../../rootfs/usr/man/man1/at.1
+mode 0644
+
+file /man/man1/awk.1
+source ../../rootfs/usr/man/man1/awk.1
+mode 0644
+
+file /man/man1/basename.1
+source ../../rootfs/usr/man/man1/basename.1
+mode 0644
+
+file /man/man1/bc.1
+source ../../rootfs/usr/man/man1/bc.1
+mode 0644
+
+file /man/man1/cal.1
+source ../../rootfs/usr/man/man1/cal.1
+mode 0644
+
+file /man/man1/calendar.1
+source ../../rootfs/usr/man/man1/calendar.1
+mode 0644
+
+file /man/man1/cat.1
+source ../../rootfs/usr/man/man1/cat.1
+mode 0644
+
+file /man/man1/chmod.1
+source ../../rootfs/usr/man/man1/chmod.1
+mode 0644
+
+file /man/man1/chown.1
+source ../../rootfs/usr/man/man1/chown.1
+mode 0644
+
+file /man/man1/clri.1m
+source ../../rootfs/usr/man/man1/clri.1m
+mode 0644
+
+file /man/man1/cmp.1
+source ../../rootfs/usr/man/man1/cmp.1
+mode 0644
+
+file /man/man1/col.1
+source ../../rootfs/usr/man/man1/col.1
+mode 0644
+
+file /man/man1/comm.1
+source ../../rootfs/usr/man/man1/comm.1
+mode 0644
+
+file /man/man1/cp.1
+source ../../rootfs/usr/man/man1/cp.1
+mode 0644
+
+file /man/man1/crypt.1
+source ../../rootfs/usr/man/man1/crypt.1
+mode 0644
+
+file /man/man1/date.1
+source ../../rootfs/usr/man/man1/date.1
+mode 0644
+
+file /man/man1/dc.1
+source ../../rootfs/usr/man/man1/dc.1
+mode 0644
+
+file /man/man1/dcheck.1m
+source ../../rootfs/usr/man/man1/dcheck.1m
+mode 0644
+
+file /man/man1/dd.1
+source ../../rootfs/usr/man/man1/dd.1
+mode 0644
+
+file /man/man1/df.1m
+source ../../rootfs/usr/man/man1/df.1m
+mode 0644
+
+file /man/man1/diff.1
+source ../../rootfs/usr/man/man1/diff.1
+mode 0644
+
+file /man/man1/dmesg.1
+source ../../rootfs/usr/man/man1/dmesg.1
+mode 0644
+
+file /man/man1/du.1
+source ../../rootfs/usr/man/man1/du.1
+mode 0644
+
+file /man/man1/echo.1
+source ../../rootfs/usr/man/man1/echo.1
+mode 0644
+
+file /man/man1/ed.1
+source ../../rootfs/usr/man/man1/ed.1
+mode 0644
+
+file /man/man1/expr.1
+source ../../rootfs/usr/man/man1/expr.1
+mode 0644
+
+file /man/man1/file.1
+source ../../rootfs/usr/man/man1/file.1
+mode 0644
+
+file /man/man1/find.1
+source ../../rootfs/usr/man/man1/find.1
+mode 0644
+
+file /man/man1/fsck.1m
+source ../../rootfs/usr/man/man1/fsck.1m
+mode 0644
+
+file /man/man1/grep.1
+source ../../rootfs/usr/man/man1/grep.1
+mode 0644
+
+link /man/man1/egrep.1
+target /man/man1/grep.1
+
+link /man/man1/fgrep.1
+target /man/man1/grep.1
+
+file /man/man1/icheck.1m
+source ../../rootfs/usr/man/man1/icheck.1m
+mode 0644
+
+file /man/man1/iostat.1m
+source ../../rootfs/usr/man/man1/iostat.1m
+mode 0644
+
+file /man/man1/join.1
+source ../../rootfs/usr/man/man1/join.1
+mode 0644
+
+file /man/man1/kill.1
+source ../../rootfs/usr/man/man1/kill.1
+mode 0644
+
+file /man/man1/lex.1
+source ../../rootfs/usr/man/man1/lex.1
+mode 0644
+
+file /man/man1/ln.1
+source ../../rootfs/usr/man/man1/ln.1
+mode 0644
+
+file /man/man1/login.1
+source ../../rootfs/usr/man/man1/login.1
+mode 0644
+
+file /man/man1/look.1
+source ../../rootfs/usr/man/man1/look.1
+mode 0644
+
+file /man/man1/ls.1
+source ../../rootfs/usr/man/man1/ls.1
+mode 0644
+
+file /man/man1/m4.1
+source ../../rootfs/usr/man/man1/m4.1
+mode 0644
+
+file /man/man1/mail.1
+source ../../rootfs/usr/man/man1/mail.1
+mode 0644
+
+file /man/man1/make.1
+source ../../rootfs/usr/man/man1/make.1
+mode 0644
+
+file /man/man1/man.1
+source ../../rootfs/usr/man/man1/man.1
+mode 0644
+
+file /man/man1/manview.1
+source ../../rootfs/usr/man/man1/manview.1
+mode 0644
+
+file /man/man1/mesg.1
+source ../../rootfs/usr/man/man1/mesg.1
+mode 0644
+
+file /man/man1/mkdir.1
+source ../../rootfs/usr/man/man1/mkdir.1
+mode 0644
+
+file /man/man1/mkfs.1m
+source ../../rootfs/usr/man/man1/mkfs.1m
+mode 0644
+
+file /man/man1/mount.1m
+source ../../rootfs/usr/man/man1/mount.1m
+mode 0644
+
+file /man/man1/mv.1
+source ../../rootfs/usr/man/man1/mv.1
+mode 0644
+
+file /man/man1/ncheck.1m
+source ../../rootfs/usr/man/man1/ncheck.1m
+mode 0644
+
+file /man/man1/newgrp.1
+source ../../rootfs/usr/man/man1/newgrp.1
+mode 0644
+
+file /man/man1/nice.1
+source ../../rootfs/usr/man/man1/nice.1
+mode 0644
+
+file /man/man1/novi.1
+source ../../rootfs/usr/man/man1/novi.1
+mode 0644
+
+file /man/man1/od.1
+source ../../rootfs/usr/man/man1/od.1
+mode 0644
+
+file /man/man1/passwd.1
+source ../../rootfs/usr/man/man1/passwd.1
+mode 0644
+
+file /man/man1/pr.1
+source ../../rootfs/usr/man/man1/pr.1
+mode 0644
+
+file /man/man1/ps.1
+source ../../rootfs/usr/man/man1/ps.1
+mode 0644
+
+file /man/man1/pstat.1m
+source ../../rootfs/usr/man/man1/pstat.1m
+mode 0644
+
+file /man/man1/pwd.1
+source ../../rootfs/usr/man/man1/pwd.1
+mode 0644
+
+file /man/man1/quot.1m
+source ../../rootfs/usr/man/man1/quot.1m
+mode 0644
+
+file /man/man1/rev.1
+source ../../rootfs/usr/man/man1/rev.1
+mode 0644
+
+file /man/man1/rm.1
+source ../../rootfs/usr/man/man1/rm.1
+mode 0644
+
+file /man/man1/sa.1m
+source ../../rootfs/usr/man/man1/sa.1m
+mode 0644
+
+file /man/man1/sed.1
+source ../../rootfs/usr/man/man1/sed.1
+mode 0644
+
+file /man/man1/sh.1
+source ../../rootfs/usr/man/man1/sh.1
+mode 0644
+
+file /man/man1/sleep.1
+source ../../rootfs/usr/man/man1/sleep.1
+mode 0644
+
+file /man/man1/sort.1
+source ../../rootfs/usr/man/man1/sort.1
+mode 0644
+
+file /man/man1/split.1
+source ../../rootfs/usr/man/man1/split.1
+mode 0644
+
+file /man/man1/stty.1
+source ../../rootfs/usr/man/man1/stty.1
+mode 0644
+
+file /man/man1/su.1
+source ../../rootfs/usr/man/man1/su.1
+mode 0644
+
+file /man/man1/sum.1
+source ../../rootfs/usr/man/man1/sum.1
+mode 0644
+
+file /man/man1/sync.1m
+source ../../rootfs/usr/man/man1/sync.1m
+mode 0644
+
+file /man/man1/tail.1
+source ../../rootfs/usr/man/man1/tail.1
+mode 0644
+
+file /man/man1/tar.1
+source ../../rootfs/usr/man/man1/tar.1
+mode 0644
+
+file /man/man1/tee.1
+source ../../rootfs/usr/man/man1/tee.1
+mode 0644
+
+file /man/man1/test.1
+source ../../rootfs/usr/man/man1/test.1
+mode 0644
+
+file /man/man1/time.1
+source ../../rootfs/usr/man/man1/time.1
+mode 0644
+
+file /man/man1/touch.1
+source ../../rootfs/usr/man/man1/touch.1
+mode 0644
+
+file /man/man1/tr.1
+source ../../rootfs/usr/man/man1/tr.1
+mode 0644
+
+file /man/man1/tsort.1
+source ../../rootfs/usr/man/man1/tsort.1
+mode 0644
+
+file /man/man1/tty.1
+source ../../rootfs/usr/man/man1/tty.1
+mode 0644
+
+file /man/man1/uniq.1
+source ../../rootfs/usr/man/man1/uniq.1
+mode 0644
+
+file /man/man1/units.1
+source ../../rootfs/usr/man/man1/units.1
+mode 0644
+
+file /man/man1/vmstat.1
+source ../../rootfs/usr/man/man1/vmstat.1
+mode 0644
+
+file /man/man1/wall.1m
+source ../../rootfs/usr/man/man1/wall.1m
+mode 0644
+
+file /man/man1/wc.1
+source ../../rootfs/usr/man/man1/wc.1
+mode 0644
+
+file /man/man1/who.1
+source ../../rootfs/usr/man/man1/who.1
+mode 0644
+
+file /man/man1/write.1
+source ../../rootfs/usr/man/man1/write.1
+mode 0644
+
+file /man/man1/yacc.1
+source ../../rootfs/usr/man/man1/yacc.1
+mode 0644
+
+file /man/man1/yes.1
+source ../../rootfs/usr/man/man1/yes.1
+mode 0644
+
+file /man/man2/access.2
+source ../../rootfs/usr/man/man2/access.2
+mode 0644
+
+file /man/man2/acct.2
+source ../../rootfs/usr/man/man2/acct.2
+mode 0644
+
+file /man/man2/alarm.2
+source ../../rootfs/usr/man/man2/alarm.2
+mode 0644
+
+file /man/man2/brk.2
+source ../../rootfs/usr/man/man2/brk.2
+mode 0644
+
+file /man/man2/chdir.2
+source ../../rootfs/usr/man/man2/chdir.2
+mode 0644
+
+file /man/man2/chmod.2
+source ../../rootfs/usr/man/man2/chmod.2
+mode 0644
+
+file /man/man2/chown.2
+source ../../rootfs/usr/man/man2/chown.2
+mode 0644
+
+file /man/man2/close.2
+source ../../rootfs/usr/man/man2/close.2
+mode 0644
+
+file /man/man2/creat.2
+source ../../rootfs/usr/man/man2/creat.2
+mode 0644
+
+file /man/man2/dup.2
+source ../../rootfs/usr/man/man2/dup.2
+mode 0644
+
+file /man/man2/exec.2
+source ../../rootfs/usr/man/man2/exec.2
+mode 0644
+
+file /man/man2/exit.2
+source ../../rootfs/usr/man/man2/exit.2
+mode 0644
+
+file /man/man2/fork.2
+source ../../rootfs/usr/man/man2/fork.2
+mode 0644
+
+file /man/man2/getpid.2
+source ../../rootfs/usr/man/man2/getpid.2
+mode 0644
+
+file /man/man2/getuid.2
+source ../../rootfs/usr/man/man2/getuid.2
+mode 0644
+
+file /man/man2/intro.2
+source ../../rootfs/usr/man/man2/intro.2
+mode 0644
+
+file /man/man2/ioctl.2
+source ../../rootfs/usr/man/man2/ioctl.2
+mode 0644
+
+file /man/man2/kctl.2
+source ../../rootfs/usr/man/man2/kctl.2
+mode 0644
+
+file /man/man2/kill.2
+source ../../rootfs/usr/man/man2/kill.2
+mode 0644
+
+file /man/man2/link.2
+source ../../rootfs/usr/man/man2/link.2
+mode 0644
+
+file /man/man2/lock.2
+source ../../rootfs/usr/man/man2/lock.2
+mode 0644
+
+file /man/man2/lseek.2
+source ../../rootfs/usr/man/man2/lseek.2
+mode 0644
+
+file /man/man2/mknod.2
+source ../../rootfs/usr/man/man2/mknod.2
+mode 0644
+
+file /man/man2/mount.2
+source ../../rootfs/usr/man/man2/mount.2
+mode 0644
+
+file /man/man2/nice.2
+source ../../rootfs/usr/man/man2/nice.2
+mode 0644
+
+file /man/man2/open.2
+source ../../rootfs/usr/man/man2/open.2
+mode 0644
+
+file /man/man2/pause.2
+source ../../rootfs/usr/man/man2/pause.2
+mode 0644
+
+file /man/man2/phys.2
+source ../../rootfs/usr/man/man2/phys.2
+mode 0644
+
+file /man/man2/pipe.2
+source ../../rootfs/usr/man/man2/pipe.2
+mode 0644
+
+file /man/man2/profil.2
+source ../../rootfs/usr/man/man2/profil.2
+mode 0644
+
+file /man/man2/ptrace.2
+source ../../rootfs/usr/man/man2/ptrace.2
+mode 0644
+
+file /man/man2/read.2
+source ../../rootfs/usr/man/man2/read.2
+mode 0644
+
+file /man/man2/setuid.2
+source ../../rootfs/usr/man/man2/setuid.2
+mode 0644
+
+file /man/man2/signal.2
+source ../../rootfs/usr/man/man2/signal.2
+mode 0644
+
+file /man/man2/stat.2
+source ../../rootfs/usr/man/man2/stat.2
+mode 0644
+
+file /man/man2/stime.2
+source ../../rootfs/usr/man/man2/stime.2
+mode 0644
+
+file /man/man2/sync.2
+source ../../rootfs/usr/man/man2/sync.2
+mode 0644
+
+file /man/man2/time.2
+source ../../rootfs/usr/man/man2/time.2
+mode 0644
+
+file /man/man2/times.2
+source ../../rootfs/usr/man/man2/times.2
+mode 0644
+
+file /man/man2/umask.2
+source ../../rootfs/usr/man/man2/umask.2
+mode 0644
+
+file /man/man2/unlink.2
+source ../../rootfs/usr/man/man2/unlink.2
+mode 0644
+
+file /man/man2/utime.2
+source ../../rootfs/usr/man/man2/utime.2
+mode 0644
+
+file /man/man2/wait.2
+source ../../rootfs/usr/man/man2/wait.2
+mode 0644
+
+file /man/man2/write.2
+source ../../rootfs/usr/man/man2/write.2
+mode 0644
+
+file /man/man3/abort.3
+source ../../rootfs/usr/man/man3/abort.3
+mode 0644
+
+file /man/man3/abs.3
+source ../../rootfs/usr/man/man3/abs.3
+mode 0644
+
+file /man/man3/assert.3x
+source ../../rootfs/usr/man/man3/assert.3x
+mode 0644
+
+file /man/man3/atexit.3
+source ../../rootfs/usr/man/man3/atexit.3
+mode 0644
+
+file /man/man3/atof.3
+source ../../rootfs/usr/man/man3/atof.3
+mode 0644
+
+file /man/man3/crypt.3
+source ../../rootfs/usr/man/man3/crypt.3
+mode 0644
+
+file /man/man3/ctime.3
+source ../../rootfs/usr/man/man3/ctime.3
+mode 0644
+
+file /man/man3/ctype.3
+source ../../rootfs/usr/man/man3/ctype.3
+mode 0644
+
+file /man/man3/curses.3
+source ../../rootfs/usr/man/man3/curses.3
+mode 0644
+
+file /man/man3/directory.3
+source ../../rootfs/usr/man/man3/directory.3
+mode 0644
+
+file /man/man3/ecvt.3
+source ../../rootfs/usr/man/man3/ecvt.3
+mode 0644
+
+file /man/man3/end.3
+source ../../rootfs/usr/man/man3/end.3
+mode 0644
+
+file /man/man3/exp.3m
+source ../../rootfs/usr/man/man3/exp.3m
+mode 0644
+
+file /man/man3/fclose.3s
+source ../../rootfs/usr/man/man3/fclose.3s
+mode 0644
+
+file /man/man3/ferror.3s
+source ../../rootfs/usr/man/man3/ferror.3s
+mode 0644
+
+file /man/man3/floor.3m
+source ../../rootfs/usr/man/man3/floor.3m
+mode 0644
+
+file /man/man3/fopen.3s
+source ../../rootfs/usr/man/man3/fopen.3s
+mode 0644
+
+file /man/man3/fread.3s
+source ../../rootfs/usr/man/man3/fread.3s
+mode 0644
+
+file /man/man3/frexp.3
+source ../../rootfs/usr/man/man3/frexp.3
+mode 0644
+
+file /man/man3/fseek.3s
+source ../../rootfs/usr/man/man3/fseek.3s
+mode 0644
+
+file /man/man3/getc.3s
+source ../../rootfs/usr/man/man3/getc.3s
+mode 0644
+
+file /man/man3/getenv.3
+source ../../rootfs/usr/man/man3/getenv.3
+mode 0644
+
+file /man/man3/getgrent.3
+source ../../rootfs/usr/man/man3/getgrent.3
+mode 0644
+
+file /man/man3/getlogin.3
+source ../../rootfs/usr/man/man3/getlogin.3
+mode 0644
+
+file /man/man3/getpass.3
+source ../../rootfs/usr/man/man3/getpass.3
+mode 0644
+
+file /man/man3/getpw.3
+source ../../rootfs/usr/man/man3/getpw.3
+mode 0644
+
+file /man/man3/getpwent.3
+source ../../rootfs/usr/man/man3/getpwent.3
+mode 0644
+
+file /man/man3/gets.3s
+source ../../rootfs/usr/man/man3/gets.3s
+mode 0644
+
+file /man/man3/hypot.3m
+source ../../rootfs/usr/man/man3/hypot.3m
+mode 0644
+
+file /man/man3/intro.3
+source ../../rootfs/usr/man/man3/intro.3
+mode 0644
+
+file /man/man3/j0.3m
+source ../../rootfs/usr/man/man3/j0.3m
+mode 0644
+
+file /man/man3/malloc.3
+source ../../rootfs/usr/man/man3/malloc.3
+mode 0644
+
+file /man/man3/mkstemp.3
+source ../../rootfs/usr/man/man3/mkstemp.3
+mode 0644
+
+file /man/man3/mktemp.3
+source ../../rootfs/usr/man/man3/mktemp.3
+mode 0644
+
+file /man/man3/perror.3
+source ../../rootfs/usr/man/man3/perror.3
+mode 0644
+
+file /man/man3/popen.3s
+source ../../rootfs/usr/man/man3/popen.3s
+mode 0644
+
+file /man/man3/printf.3s
+source ../../rootfs/usr/man/man3/printf.3s
+mode 0644
+
+file /man/man3/putc.3s
+source ../../rootfs/usr/man/man3/putc.3s
+mode 0644
+
+file /man/man3/puts.3s
+source ../../rootfs/usr/man/man3/puts.3s
+mode 0644
+
+file /man/man3/qsort.3
+source ../../rootfs/usr/man/man3/qsort.3
+mode 0644
+
+file /man/man3/rand.3
+source ../../rootfs/usr/man/man3/rand.3
+mode 0644
+
+file /man/man3/scanf.3s
+source ../../rootfs/usr/man/man3/scanf.3s
+mode 0644
+
+file /man/man3/setbuf.3s
+source ../../rootfs/usr/man/man3/setbuf.3s
+mode 0644
+
+file /man/man3/setjmp.3
+source ../../rootfs/usr/man/man3/setjmp.3
+mode 0644
+
+file /man/man3/sin.3m
+source ../../rootfs/usr/man/man3/sin.3m
+mode 0644
+
+file /man/man3/sinh.3m
+source ../../rootfs/usr/man/man3/sinh.3m
+mode 0644
+
+file /man/man3/sleep.3
+source ../../rootfs/usr/man/man3/sleep.3
+mode 0644
+
+file /man/man3/stdio.3s
+source ../../rootfs/usr/man/man3/stdio.3s
+mode 0644
+
+file /man/man3/string.3
+source ../../rootfs/usr/man/man3/string.3
+mode 0644
+
+file /man/man3/swab.3
+source ../../rootfs/usr/man/man3/swab.3
+mode 0644
+
+file /man/man3/system.3
+source ../../rootfs/usr/man/man3/system.3
+mode 0644
+
+file /man/man3/termcap.3
+source ../../rootfs/usr/man/man3/termcap.3
+mode 0644
+
+file /man/man3/ttyname.3
+source ../../rootfs/usr/man/man3/ttyname.3
+mode 0644
+
+file /man/man3/ungetc.3s
+source ../../rootfs/usr/man/man3/ungetc.3s
+mode 0644
+
+file /man/man5/acct.5
+source ../../rootfs/usr/man/man5/acct.5
+mode 0644
+
+file /man/man5/dir.5
+source ../../rootfs/usr/man/man5/dir.5
+mode 0644
+
+file /man/man5/environ.5
+source ../../rootfs/usr/man/man5/environ.5
+mode 0644
+
+file /man/man5/filsys.5
+source ../../rootfs/usr/man/man5/filsys.5
+mode 0644
+
+file /man/man5/group.5
+source ../../rootfs/usr/man/man5/group.5
+mode 0644
+
+file /man/man5/mtab.5
+source ../../rootfs/usr/man/man5/mtab.5
+mode 0644
+
+file /man/man5/passwd.5
+source ../../rootfs/usr/man/man5/passwd.5
+mode 0644
+
+file /man/man5/ttys.5
+source ../../rootfs/usr/man/man5/ttys.5
+mode 0644
+
+file /man/man5/types.5
+source ../../rootfs/usr/man/man5/types.5
+mode 0644
+
+file /man/man5/utmp.5
+source ../../rootfs/usr/man/man5/utmp.5
+mode 0644
+
+file /man/man8/cron.8
+source ../../rootfs/usr/man/man8/cron.8
+mode 0644
+
+file /man/man8/getty.8
+source ../../rootfs/usr/man/man8/getty.8
+mode 0644
+
+file /man/man8/init.8
+source ../../rootfs/usr/man/man8/init.8
+mode 0644
+
+file /man/man8/makekey.8
+source ../../rootfs/usr/man/man8/makekey.8
+mode 0644
+
+file /man/man8/update.8
+source ../../rootfs/usr/man/man8/update.8
+mode 0644
+
+# ---- /usr/lib --------------------------------------------------------------------
+
+file /lib/atrun         # run the jobs at(1) queued
+source ../../rootfs/usr/lib/atrun
+mode 0755
+
+file /lib/diffh         # diff -h back end
+source ../../rootfs/usr/lib/diffh
+mode 0755
+
+file /lib/makekey       # generate encryption key
+source ../../rootfs/usr/lib/makekey
+mode 0755
+
+file /lib/calendar      # reminder service
+source ../../rootfs/usr/lib/calendar
+mode 0755
+
+file /lib/crontab       # cron(8) table
+source ../../rootfs/usr/lib/crontab
+mode 0644
+
+file /lib/units         # conversion program
+source ../../rootfs/usr/lib/units
+mode 0644
+
+file /lib/lib.b         # bc -l library
+source ../../rootfs/usr/lib/lib.b
+mode 0644
+
+file /lib/yaccpar       # yacc parser skeleton
+source ../../rootfs/usr/lib/yaccpar
+mode 0644
+
+dir /lib/lex
+
+file /lib/lex/ncform    # lex scanner skeleton
+source ../../rootfs/usr/lib/lex/ncform
+mode 0644
+
+file /lib/calendars/calendar.birthday # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.birthday
+mode 0644
+
+file /lib/calendars/calendar.christian # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.christian
+mode 0644
+
+file /lib/calendars/calendar.computer # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.computer
+mode 0644
+
+file /lib/calendars/calendar.history # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.history
+mode 0644
+
+file /lib/calendars/calendar.holiday # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.holiday
+mode 0644
+
+file /lib/calendars/calendar.judaic # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.judaic
+mode 0644
+
+file /lib/calendars/calendar.music # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.music
+mode 0644
+
+file /lib/calendars/calendar.usholiday # calendar(1) database
+source ../../rootfs/usr/lib/calendars/calendar.usholiday
+mode 0644
+
+# ---- /usr/dict -------------------------------------------------------------------
+
+file /dict/words        # look(1) default dictionary
+source ../../rootfs/usr/dict/words
+mode 0644

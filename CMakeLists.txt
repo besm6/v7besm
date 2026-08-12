@@ -449,6 +449,12 @@ if(B6RUNTIME_LIB)
     if(TARGET rootimg)
         add_dependencies(rootimg rootfs)
     endif()
+    # usr.img is built from build/rootfs/usr -- the ROOT's staging tree, shared, so that the
+    # split needed no b6_prog() DEST to move.  Hence `rootfs' here and not a usrfs of its own;
+    # the cost is that build/rootfs no longer holds exactly what root.img holds.
+    if(TARGET usrimg)
+        add_dependencies(usrimg rootfs)
+    endif()
     if(TARGET testimg)
         add_dependencies(testimg testfs)
     endif()

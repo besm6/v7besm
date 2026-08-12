@@ -7,7 +7,7 @@
 #
 # SINCE TASK 25c THE SAME IMAGES ALSO GO ON A DISK, and since the test pack arrived that disk
 # is one of their own: test.img, built from ../../scripts/test.manifest, holding them as /test/<name>
-# and reaching a booted kernel as /mnt/test/<name> once /dev/md1 is mounted.  They were
+# and reaching a booted kernel as /mnt/test/<name> once /dev/md7 is mounted.  They were
 # /usr/test on the ROOT image until then, which cost that disk ~262 of its 2000 blocks for
 # programs no boot path, no command and no manual page refers to.
 #

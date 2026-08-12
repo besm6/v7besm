@@ -639,10 +639,13 @@ The other three boot the image. `boot` gets process 1 out of the kernel and into
 which forks a shell, which **prompts**; it attaches the disk read-only, which is an assertion in
 itself, since that whole path writes nothing. `multi` types `^D` at that prompt and goes the rest
 of the way — `/etc/rc`, a getty per line, `crypt(3)`, and two people logged in at once on the two
-Consuls. `core` mounts the **test pack** — a second filesystem ([../scripts/test.manifest](../scripts/test.manifest)
-→ `test3077.disk`, attached read-only on `md01`) carrying the `lib/test` programs as `/test/*` — and
-runs one of them, `/mnt/test/coret`, under the real kernel, covering the two places the kernel
-builds a user address out of an integer. It is also the only live caller of `smount()`.
+Consuls. `multi` also carries the `/etc/rc` `fsck` of the **`/usr` pack** and the `mount` that follows it —
+the only place anything runs the machine's own `fsck`, and one of the two live callers of
+`smount()`. `core` mounts the **test pack** — a third filesystem
+([../scripts/test.manifest](../scripts/test.manifest) → `test3077.disk`, attached read-only on
+`md07`) carrying the `lib/test` programs as `/test/*` — and runs one of them, `/mnt/test/coret`,
+under the real kernel, covering the two places the kernel builds a user address out of an integer.
+It is the other caller of `smount()`, and the only one that types the mount by hand.
 
 ## Further reading
 

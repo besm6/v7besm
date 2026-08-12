@@ -111,9 +111,9 @@ endif()
 enable_testing()
 add_subdirectory(test)
 
-# unix.ini attaches test/root3072.disk and runs test/date.ini, so `make demo' needs the root
-# image and that script built as well as the kernel.  Both targets come from test/, hence the
-# dependency here rather than above.
+# unix.ini attaches test/root3072.disk and test/usr3100.disk and runs test/date.ini, so
+# `make demo' needs both images and that script built as well as the kernel.  All three
+# targets come from test/, hence the dependency here rather than above.
 if(BESM6)
-    add_dependencies(demo rootimg dateini)
+    add_dependencies(demo rootimg usrimg dateini)
 endif()

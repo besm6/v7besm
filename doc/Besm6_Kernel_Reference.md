@@ -246,10 +246,14 @@ These cover the image the build produces ([../scripts/root.manifest](../scripts/
 | `core` | the test pack mounted on `/mnt`, then one user program (`/mnt/test/coret`) typed at that prompt: `core()` dumping a real image and `ptrace(2)` reaching a real stopped child — the two places the kernel builds a user address out of an integer |
 
 `boot` attaches the pristine disk read-only — an assertion in itself; `multi` and `core` write the
-root, so each converts a copy of its own. The **test pack** ([../scripts/test.manifest](../scripts/test.manifest) →
-`test3077.disk`) is the second filesystem, carrying the `lib/test` programs as `/test/*`; it is
-attached `-r` on `md01` and mounted `-r`, so one copy serves every test and only `core` wants it.
-Nothing mounts it automatically — `/etc/rc` has no line for it, deliberately. All three are **`RUN_SERIAL`**: they type at the guest on a step
+root, so each converts a copy of its own. The **`/usr` pack**
+([../scripts/usr.manifest](../scripts/usr.manifest) → `usr3100.disk`) is the second filesystem:
+`/etc/rc` fscks `/dev/rmd1` and mounts `md01` on `/usr` read-write on every boot into multi-user
+mode, so `multi` converts a copy of that too, at volume 3101. The **test pack**
+([../scripts/test.manifest](../scripts/test.manifest) → `test3077.disk`) is the third, carrying the
+`lib/test` programs as `/test/*`; it is attached `-r` on `md07` and mounted `-r`, so one copy serves
+every test and only `core` wants it. Nothing mounts *that* one automatically — `/etc/rc` has no line
+for it, deliberately. All three are **`RUN_SERIAL`**: they type at the guest on a step
 budget, and SIMH drops characters out of a `send` when the host is oversubscribed. `core`
 adjudicates itself — `coret` prints a verdict per line and the `.ini` fires on the first `FAIL`, so
 no `.expected` on the host has to keep step with the image's layout; that is the pattern to copy

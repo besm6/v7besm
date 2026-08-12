@@ -97,15 +97,17 @@ set-uid *mkfs* would let anybody destroy every file on a volume with one command
 ## WARNING
 
 *Mkfs* does not know which volume the system is running from, and nothing stops you naming it.
-*mkfs /dev/rmd0* destroys the root filesystem while it is mounted. There is no check to be
-made: the raw major and the block major are different numbers and nothing on this machine maps
-one to the other. v7 had no guard either.
+*mkfs /dev/rmd0* destroys the root filesystem while it is mounted, and *mkfs /dev/rmd1*
+destroys */usr* the same way. There is no check to be made: the raw major and the block major
+are different numbers and nothing on this machine maps one to the other. v7 had no guard
+either.
 
 ## FILES
 
-*/dev/rmd1* - the second drive, and the only volume on this system it is safe to name. There is
-one drive per *minor* number, bit 5 the controller, bits 4-3 the group and bits 2-0 the drive;
-there are no partitions.
+*/dev/rmd4* - an unassigned drive, and the kind of volume it is safe to name. The first four
+are spoken for: *rmd0* is the root, *rmd1* is */usr*, and *rmd2* and *rmd3* are reserved for
+*/tmp* and */home*; *rmd7* is the test pack. There is one drive per *minor* number, bit 5 the
+controller, bits 4-3 the group and bits 2-0 the drive; there are no partitions.
 
 ## DIAGNOSTICS
 

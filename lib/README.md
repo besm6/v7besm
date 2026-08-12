@@ -188,6 +188,6 @@ than let a `$TERMCAP` in the developer's shell decide what it reads.
 
 These same programs also go on a disk — the **test pack**, [`../scripts/test.manifest`](../scripts/test.manifest)
 → `test3077.disk`, as `/test/*`, which a booted kernel reaches as `/mnt/test/*` after
-`/etc/mount /dev/md1 /mnt -r`. They were `/usr/test` on the root image until that pack existed.
+`/etc/mount /dev/md7 /mnt -r`. They were `/usr/test` on the root image until that pack existed.
 The runner that executed them there is deleted, so the disk is now a picture of them rather than
 something under test; `kernel/test/core` is the one thing that still execs one.

@@ -58,9 +58,16 @@ srcdir=$3
 ttyhost=$4
 
 rm -rf multi.img root3085.disk multiafter.img multi.modes multi.out \
+       multiusr.img usr3101.disk multiusrafter.img \
        multi.tty1 multi.tty1.raw multi.ready
 cp root.img multi.img
 "$b6fsutil" -S --volume=3085 multi.img root3085.disk
+
+# THE /usr PACK IS COPIED TOO, unlike the read-only test pack: /etc/rc mounts it READ-WRITE,
+# and stages 14-22 of the dialogue write to it -- at's spool, atrun's past/, and the mailbox
+# mail creates.  Volume 3101, beside the root's 3085.
+cp usr.img multiusr.img
+"$b6fsutil" -S --volume=3101 multiusr.img usr3101.disk
 
 "$ttyhost" 4200 multi.tty1.raw multi.ready 600 &
 host=$!
@@ -96,6 +103,18 @@ diff -u "$srcdir/multi.expected" multi.tty1
 
 "$b6fsutil" -S root3085.disk multiafter.img
 "$b6fsutil" -c multiafter.img
+
+# The /usr pack, after a live read-write mount: it must still be consistent, and it must carry
+# the mailbox.  THIS IS THE HALF multi.ini CANNOT SEE -- the dialogue proved a letter arrived at
+# /usr/spool/mail/guest, but only reading the second volume proves the write landed THERE and
+# not on a root directory that happened to be called /usr.  The pack's own spelling is
+# /spool/mail/guest: its root is what mounts at /usr.
+"$b6fsutil" -S usr3101.disk multiusrafter.img
+"$b6fsutil" -c multiusrafter.img
+if ! "$b6fsutil" -v -v multiusrafter.img | grep -q ' /spool/mail/guest$'; then
+    echo "run-multi.sh: no mailbox on the /usr pack -- mail wrote the root, or /usr was never mounted" >&2
+    exit 1
+fi
 
 # A projection of `b6fsutil -v -v': type, mode, uid/gid and the path, with the size and i-number
 # dropped because neither is on trial.  Sorted on the path so the expectation does not encode the

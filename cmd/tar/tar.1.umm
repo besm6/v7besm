@@ -88,8 +88,9 @@ a directory whose own path leaves no room for the names under it.
 
 ### AN ARCHIVE ON A RAW DEVICE
 
-*Tar* can write straight onto **/dev/rmd1** without a filesystem on it, which is how a tree
-leaves this machine. A raw transfer goes through *physio*(), which requires the count to be a
+*Tar* can write straight onto a raw drive with no filesystem on it -- **/dev/rmd4**, say,
+which is unassigned -- and that is how a tree leaves this machine. Do not name **/dev/rmd1**:
+that is the mounted */usr*. A raw transfer goes through *physio*(), which requires the count to be a
 whole number of 3072-byte filesystem blocks and the buffer to lie on a 512-word boundary. 512
 times the blocking factor is a multiple of 3072 only when the factor is a multiple of **6**, so
 on a character special the default is 6 and a factor that is not a multiple of 6 is refused

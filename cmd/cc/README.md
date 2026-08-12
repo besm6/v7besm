@@ -248,9 +248,9 @@ Three deliberate choices in it:
 * **It lives in the guest account's home**, which is the only directory on the image a
   non-root user can write in besides `/tmp` — and `cc` writes `hello.o` and `a.out` into the
   *current* directory, so that is where a logged-in user can build it where it sits. That home
-  was `/usr/guest` until accounts moved to a top-level `/home` of their own: on this image
-  `/usr` is a directory of the root rather than the separate volume v7 hung accounts off, so it
-  keeps the system's second half and nothing else.
+  was `/usr/guest` until accounts moved to a top-level `/home` of their own: `/usr` is a volume
+  of its own here, as it was on v7, but it keeps the system's second half and no accounts —
+  which is also why `/lib` stayed on the root, where `cc` can reach it before `/usr` is up.
   [root.manifest](../../scripts/root.manifest) carries the argument.
 
 Section 6 of `kernel/test/toolchain` builds it exactly as its header says to, and is the

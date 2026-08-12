@@ -120,10 +120,10 @@ filesystem. It is not as bad as the paragraph above suggests, though: the times 
 because *mv* restores them with utime(2) after the copy returns. Only the owner and the links
 are lost.
 
-**Note: this cannot happen on this machine.** A cross-device move is one whose link(2) came
-back **EXDEV**, and there is only one filesystem here - one EC-5052 drive is the whole of the
-store, and swap lives on the drums. The path is faithfully ported and **/bin/cp** really is on
-the image, but nothing exercises it and nothing can until there is a second thing to mount.
+**This became reachable when /usr moved onto a pack of its own.** A cross-device move is one
+whose link(2) came back **EXDEV**, and *mv /usr/bin/cc /bin/cc* is now exactly that: */usr* is
+a second filesystem, mounted by */etc/rc* on **/dev/md1**. The path is faithfully ported and
+**/bin/cp** really is on the image, but nothing in the test suite exercises it yet.
 
 *Mv* should take **-f** flag, like *rm,* to suppress the question if the target exists and is
 not writable.

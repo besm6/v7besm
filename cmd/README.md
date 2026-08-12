@@ -262,15 +262,20 @@ Where a fixed buffer can be sized so that nothing has to test it, do that instea
    goes in `kernel/test/multi`, the one test that types the `^D` past the single-user shell.
 5. The test, per §9.
 
-One list must grow with the program and nothing catches it but a failing build: `ROOTFS_FILES`
-in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). **A port is not done when it
+One list must grow with the program and nothing catches it but a failing build, and **which list
+depends on where the program lands**: `USRFS_FILES` when its `DEST` is under `usr/`, `ROOTFS_FILES`
+otherwise, both in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The manifest
+follows the same split — [../scripts/usr.manifest](../scripts/usr.manifest) or
+[../scripts/root.manifest](../scripts/root.manifest) — and in the `/usr` one the leading `/usr`
+comes off the path, because the pack's root is what mounts there. **A port is not done when it
 compiles**: it is done when `make` builds, `ctest` passes, and the program is on the image with a
 test asserting it.
 
-**The disk is one EC-5052: 2000 blocks, 6,144,000 bytes, and about 91 are free.** That is room for
-a good deal but not for anything: weigh a large addition *before* the port, and **take the number
-from a build** — `b6fsutil` prints it every time `root.img` is made — rather than from this
-paragraph, which has drifted before. What to budget for:
+**Each disk is one EC-5052: 2000 blocks, 6,144,000 bytes.** The root has about 870 free, the
+`/usr` pack about 1,186 and the test pack 1,686. That is room for a good deal but not for
+anything: weigh a large addition *before* the port, decide **which disk you are spending**, and
+**take the number from a build** — `b6fsutil` prints it every time an image is made — rather than
+from this paragraph, which has drifted before. What to budget for:
 
 * A program is not the only cost. Any **directory** it needs is a block; a program past 6 blocks
   pays an **indirect block** as well, an inode holding six direct addresses; and an edit to a file
@@ -472,8 +477,10 @@ is why `b6fsutil -D`'s damage targets are **symbolic**.
 **The better answer, where there is one, is not to encode the layout at all** —
 [`lib/libc/gen/dirdesc.h`](../lib/libc/gen/dirdesc.h) makes that assertion once for every
 `opendir(3)` caller. So the first question is whether this program is one of the five `/dev/rmd*`
-readers in §5. The devices they are pointed at are all on the image: `/dev/rmd0`, `/dev/rmd1` and
-`/dev/rmb0` (`cdevsw[3]` and `[4]`), and the block nodes `/dev/md0`, `/dev/md1` and `/dev/md2`.
+readers in §5. The devices they are pointed at are all on the image: `/dev/rmd0`–`/dev/rmd7` and
+`/dev/rmb0` (`cdevsw[3]` and `[4]`), and the block nodes `/dev/md0`–`/dev/md7`. `rmd0` is the
+root and `rmd1` is the mounted `/usr`, so a page or a test wanting scratch names `rmd4`, `rmd5`
+or `rmd6` — the unassigned ones.
 
 ---
 

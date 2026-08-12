@@ -94,11 +94,15 @@ if(NOT DEFINED B6_ROOTFS)
     set(B6_ROOTFS ${CMAKE_BINARY_DIR}/rootfs)
 endif()
 
-# And the staging tree of the SECOND filesystem, the test pack: build/testfs/test/hello is
-# /test/hello on test.img (test.manifest, beside this file) and /mnt/test/hello once it is
-# mounted.  A tree of its own rather than a corner of B6_ROOTFS, so that B6_ROOTFS goes on
-# meaning exactly what the root image holds.  Only lib/test/ stages into it; b6_prog() does
-# not, and its DEST is still relative to B6_ROOTFS.
+# And the staging tree of the test pack: build/testfs/test/hello is /test/hello on test.img
+# (test.manifest, beside this file) and /mnt/test/hello once it is mounted.  A tree of its own
+# rather than a corner of B6_ROOTFS.  Only lib/test/ stages into it; b6_prog() does not, and
+# its DEST is still relative to B6_ROOTFS.
+#
+# THE /usr PACK HAS NO TREE OF ITS OWN, unlike this one: usr.img is built straight out of
+# build/rootfs/usr (usr.manifest), so no b6_prog() DEST had to move for that split.  The price
+# is that B6_ROOTFS no longer holds exactly what root.img holds -- it holds the root's contents
+# and the /usr pack's together, and the two manifests divide them.
 if(NOT DEFINED B6_TESTFS)
     set(B6_TESTFS ${CMAKE_BINARY_DIR}/testfs)
 endif()

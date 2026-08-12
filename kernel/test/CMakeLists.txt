@@ -241,24 +241,12 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/rc
     ${B6_ROOTFS}/etc/termcap
     ${B6_ROOTFS}/etc/ttys
-    ${B6_ROOTFS}/usr/dict/words
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/at
-    ${B6_ROOTFS}/usr/lib/atrun
     ${B6_ROOTFS}/bin/awk
     ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/bc
     ${B6_ROOTFS}/bin/cal
-    ${B6_ROOTFS}/usr/bin/calendar
-    ${B6_ROOTFS}/usr/lib/calendar
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.birthday
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.christian
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.computer
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.history
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.holiday
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.judaic
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.music
-    ${B6_ROOTFS}/usr/lib/calendars/calendar.usholiday
     ${B6_ROOTFS}/bin/cat
     ${B6_ROOTFS}/bin/chgrp
     ${B6_ROOTFS}/bin/chmod
@@ -275,28 +263,6 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/diff
     ${B6_ROOTFS}/bin/dmesg
     ${B6_ROOTFS}/bin/du
-    ${B6_ROOTFS}/usr/lib/diffh
-    ${B6_ROOTFS}/usr/lib/makekey
-    ${B6_ROOTFS}/usr/lib/lib.b
-    ${B6_ROOTFS}/usr/lib/units
-    ${B6_ROOTFS}/usr/lib/crontab
-    ${B6_ROOTFS}/usr/lib/yaccpar
-    ${B6_ROOTFS}/usr/lib/lex/ncform
-    ${B6_ROOTFS}/usr/bin/cpp
-    ${B6_ROOTFS}/usr/bin/as
-    ${B6_ROOTFS}/usr/bin/ld
-    ${B6_ROOTFS}/usr/bin/nm
-    ${B6_ROOTFS}/usr/bin/size
-    ${B6_ROOTFS}/usr/bin/strip
-    ${B6_ROOTFS}/usr/bin/disasm
-    ${B6_ROOTFS}/usr/bin/lorder
-    ${B6_ROOTFS}/usr/bin/ar
-    ${B6_ROOTFS}/usr/bin/ranlib
-    ${B6_ROOTFS}/usr/bin/cc
-    ${B6_ROOTFS}/usr/bin/yacc
-    ${B6_ROOTFS}/usr/bin/lex
-    ${B6_ROOTFS}/usr/bin/man
-    ${B6_ROOTFS}/usr/bin/manview
     ${B6_ROOTFS}/home/guest/hello.S
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
@@ -358,27 +324,18 @@ set(ROOTFS_FILES
 # /bin/[ is deliberately absent: it is a `link' stanza in the manifest, not a staged file,
 # so there is nothing here for the image to depend on.  rootimg_link below is what holds it.
 
-# /usr/test IS NOT HERE ANY MORE.  The lib/test programs were on this image until the test
-# pack existed and are now on that one -- see TESTFS_FILES below, and ../../scripts/test.manifest for
-# why they moved.  Nothing else on the root refers to them.
+# /usr IS NOT HERE ANY MORE EITHER.  The manual, the headers, the toolchain and /usr/lib
+# are a filesystem of their own since the /usr pack -- see USRFS_FILES below and
+# ../../scripts/usr.manifest.  The lib/test programs left earlier, for the test pack.
 
-# ...and /lib and /usr/include, the development tree task C9e put on the image so that
-# /usr/bin/cc's default link line has something to find.  The three lists are the
-# top-level CMakeLists.txt's, declared there before this directory is added, for exactly
-# the reason above: one list, so the staging and this dependency cannot drift.  A
-# standalone `cmake -S kernel' has none of them and builds no image either.
+# ...and /lib, which STAYS ON THE ROOT while /usr/include goes to the pack: crt0.o, libc.a
+# and libruntime.a are what cc links against, and v7 kept them off /usr for the reason this
+# port does -- they are wanted before /usr is up.  B6_STAGE_LIB is the top-level
+# CMakeLists.txt's, declared there before this directory is added, for exactly the reason
+# above: one list, so the staging and this dependency cannot drift.  A standalone
+# `cmake -S kernel' has none of them and builds no image either.
 foreach(_f ${B6_STAGE_LIB})
     list(APPEND ROOTFS_FILES ${B6_ROOTFS}/lib/${_f})
-endforeach()
-foreach(_f ${B6_STAGE_INC} ${B6_STAGE_FREEINC})
-    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/include/${_f})
-endforeach()
-
-# ...and /usr/man, the two hundred manual pages.  B6_STAGE_MAN is the same kind of list and is
-# declared in the same place; it holds image-relative names -- man1/ls.1, man3/stdio.3s -- so
-# this is the whole of what the manual costs here.
-foreach(_f ${B6_STAGE_MAN})
-    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/man/${_f})
 endforeach()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
@@ -398,19 +355,110 @@ add_custom_target(rootimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root3072.disk)
 list(APPEND TEST_TARGETS rootimg)
 
 # ---------------------------------------------------------------------------------------
-# THE TEST PACK -- the second filesystem, and the second drive's first standing job.
+# THE /usr PACK -- the second filesystem, and the second drive's standing job.
+# ---------------------------------------------------------------------------------------
+#
+# usr.img holds the manual, the headers, the toolchain and /usr/lib -- 788 blocks that were
+# on the root until this existed, against 91 blocks free there.  THE PACK'S ROOT IS WHAT
+# MOUNTS AT /usr, so /usr/bin/cpp is /bin/cpp inside the manifest;
+# ../../scripts/usr.manifest's header is the account.
+#
+# NOT A SHARED ARTIFACT, unlike the test pack below.  /etc/rc mounts it READ-WRITE --
+# /usr/spool/at and /usr/spool/mail are written at run time -- so `multi', the one test that
+# runs /etc/rc, converts a writable copy of its own at volume 3101, exactly as it already
+# does for the root.  Volume 3100 for the artifact: 3072 is the root's, mdtest owns
+# 3073-3076, the test pack has 3077, and multi and core have 3085 and 3086.
+#
+# SAME -T STAMP AS THE ROOT, for reproducibility only: iinit() seeds `time' from the ROOT
+# superblock's s_time and never looks at a mounted volume's, so this governs nothing but the
+# mtimes `ls -l /usr/bin' prints.
+#
+# THE STAGING TREE IS THE ROOT'S -- build/rootfs/usr, not a tree of its own -- so nothing
+# moved for this split and no b6_prog() DEST changed.  Hence the build-ORDER edge at the foot
+# of the top-level CMakeLists.txt is `usrimg depends on rootfs', not on a usrfs.
+get_filename_component(USR_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/usr.manifest ABSOLUTE)
+
+set(USRFS_FILES
+    ${B6_ROOTFS}/usr/dict/words
+    ${B6_ROOTFS}/usr/lib/atrun
+    ${B6_ROOTFS}/usr/bin/calendar
+    ${B6_ROOTFS}/usr/lib/calendar
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.birthday
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.christian
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.computer
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.history
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.holiday
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.judaic
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.music
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.usholiday
+    ${B6_ROOTFS}/usr/lib/diffh
+    ${B6_ROOTFS}/usr/lib/makekey
+    ${B6_ROOTFS}/usr/lib/lib.b
+    ${B6_ROOTFS}/usr/lib/units
+    ${B6_ROOTFS}/usr/lib/crontab
+    ${B6_ROOTFS}/usr/lib/yaccpar
+    ${B6_ROOTFS}/usr/lib/lex/ncform
+    ${B6_ROOTFS}/usr/bin/cpp
+    ${B6_ROOTFS}/usr/bin/as
+    ${B6_ROOTFS}/usr/bin/ld
+    ${B6_ROOTFS}/usr/bin/nm
+    ${B6_ROOTFS}/usr/bin/size
+    ${B6_ROOTFS}/usr/bin/strip
+    ${B6_ROOTFS}/usr/bin/disasm
+    ${B6_ROOTFS}/usr/bin/lorder
+    ${B6_ROOTFS}/usr/bin/ar
+    ${B6_ROOTFS}/usr/bin/ranlib
+    ${B6_ROOTFS}/usr/bin/cc
+    ${B6_ROOTFS}/usr/bin/yacc
+    ${B6_ROOTFS}/usr/bin/lex
+    ${B6_ROOTFS}/usr/bin/man
+    ${B6_ROOTFS}/usr/bin/manview)
+# The man1 links for egrep and fgrep are deliberately absent: `link' stanzas, not staged
+# files, so there is nothing here to depend on.  usrimg_link_man below is what holds them.
+
+# ...and the header tree and the manual, from the same top-level lists the staging uses, so
+# that a file staged and not listed cannot go unnoticed.  B6_STAGE_MAN holds image-relative
+# names -- man1/ls.1, man3/stdio.3s.
+foreach(_f ${B6_STAGE_INC} ${B6_STAGE_FREEINC})
+    list(APPEND USRFS_FILES ${B6_ROOTFS}/usr/include/${_f})
+endforeach()
+foreach(_f ${B6_STAGE_MAN})
+    list(APPEND USRFS_FILES ${B6_ROOTFS}/usr/man/${_f})
+endforeach()
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/usr.img
+    COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
+            -M ${USR_MANIFEST} usr.img
+    DEPENDS ${USR_MANIFEST} ${USRFS_FILES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6fsutil usr.img" VERBATIM)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/usr3100.disk
+    COMMAND ${B6FSUTIL} -S usr.img usr3100.disk
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/usr.img
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6fsutil -S usr3100.disk" VERBATIM)
+
+add_custom_target(usrimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/usr3100.disk)
+list(APPEND TEST_TARGETS usrimg)
+
+# ---------------------------------------------------------------------------------------
+# THE TEST PACK -- the third filesystem, on the eighth drive.
 # ---------------------------------------------------------------------------------------
 #
 # test.img holds the lib/test programs as /test/*, and a booted kernel reaches them as
-# /mnt/test/* after `/etc/mount /dev/md1 /mnt -r'.  They were /usr/test on root.img until
+# /mnt/test/* after `/etc/mount /dev/md7 /mnt -r'.  They were /usr/test on root.img until
 # this existed; ../../scripts/test.manifest's header is the whole account, including why nothing
 # mounts it automatically.
 #
-# ONE SHARED READ-ONLY ARTIFACT.  Every .ini that wants it does `attach -r md01
-# test3077.disk' and mounts it -r, so unlike root.img -- which each booting test copies at a
-# volume of its own, because it gets written -- there is one copy and one volume number for
-# all of them.  Volume 3077: 3072 is the root artifact, mdtest owns 3073-3076, and this is
-# the next free number.
+# ON md07 AND NOT md01 SINCE THE /usr PACK TOOK THE SECOND DRIVE.  md2 and md3 are spoken
+# for as a future /tmp and /home, so this went to the far end rather than shuffling again.
+#
+# ONE SHARED READ-ONLY ARTIFACT.  Every .ini that wants it does `attach -r md07
+# test3077.disk' and mounts it -r, so unlike root.img and usr.img -- which each booting test
+# copies at a volume of its own, because they get written -- there is one copy and one volume
+# number for all of them.  Volume 3077 is unchanged: a volume number is the pack's, not the
+# drive's.
 #
 # SAME -T STAMP AS THE ROOT, so the pack is byte-reproducible too.  It is not the boot clock
 # -- iinit() seeds `time' from the ROOT superblock's s_time and never looks at a mounted
@@ -453,6 +501,25 @@ list(APPEND TEST_TARGETS testimg)
 add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
+
+# The same check on the /usr pack.  Unlike the test pack below this one IS written by a guest
+# -- /etc/rc mounts it read-write -- but not this copy: `multi' converts its own at volume
+# 3101 and run-multi.sh checks THAT one afterwards.  So a failure here is b6fsutil or
+# ../../scripts/usr.manifest, and a failure there is the kernel.
+add_test(NAME usrimg_check COMMAND ${B6FSUTIL} -c usr.img
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(usrimg_check PROPERTIES LABELS kernel)
+
+# THE MANUAL'S THREE-WAY LINK, read back off the finished pack.  grep.1 carries TWO `link'
+# stanzas -- egrep.1 and fgrep.1 -- so all three names share one inode and nlink is 3, not 2.
+# Same shape as rootimg_link_more below, and the same reason: nothing in the staging tree
+# records a link, so only the image can say whether it survived.  These moved off the root
+# with the rest of /usr/man and had no test before.
+add_test(NAME usrimg_link_man
+    COMMAND sh -c "${B6FSUTIL} -v -v usr.img | grep -E ' /man/man1/(grep|egrep|fgrep)\\.1$' | grep -c 'nlink 3 ' | grep -qx 3 && \
+                   ${B6FSUTIL} -v -v usr.img | grep -E ' /man/man1/(grep|egrep|fgrep)\\.1$' | sed 's| /man/.*||' | sort -u | grep -c . | grep -qx 1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(usrimg_link_man PROPERTIES LABELS kernel)
 
 # The same check on the test pack, and it is the ONLY thing that ever inspects it: the pack is
 # mounted read-only and no guest writes it, so a `-c' failure here can only mean b6fsutil or
@@ -629,7 +696,7 @@ if(BESM6)
     # whole machine, not one another.
     #
     # No fixture and no generated .ini: run-core.sh converts its own writable copy of
-    # root.img and attaches the shared read-only test3077.disk, both of which TEST_TARGETS
+    # root.img and attaches the shared read-only test3077.disk on md07, both of which TEST_TARGETS
     # already builds, and nothing here is a linked address.
     add_test(NAME core
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-core.sh
