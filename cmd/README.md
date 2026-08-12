@@ -404,7 +404,7 @@ checks a page against its canonical shape and runs as a `ctest` (`man_lint_<page
 in the tree, so a page must pass it.
 
 **The pages are on the image, [man/](man/) finds them and [manview/](manview/) formats them.** All
-two hundred and one are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout: the `.umm`
+205 are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout: the `.umm`
 suffix dropped, the section digit picking the directory and the subsection letter left on the file,
 so `fsck.1m.umm` is `/usr/man/man1/fsck.1m`. That layout is `man`'s whole search rule, so **the name
 of a page decides where it can be found**. They are staged as **sources** and not preformatted,

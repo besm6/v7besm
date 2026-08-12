@@ -45,10 +45,10 @@ so is the whole of `/usr/include`. You can call any of libc from assembly — `p
 `open`, `read` — because the calling convention is documented and the library is right there.
 
 Also on the machine: `ar` and `ranlib` to build your own libraries, `nm`, `size` and `strip`
-to look at what you built, and `disasm` to read a binary back as assembly. Ten of the
-toolchain's programs are the same source code as the cross-tools that build the system on your
-workstation, and they produce identical output — the machine's own assembler and linker
-reproduce the whole kernel, byte for byte.
+to look at what you built, `disasm` to read a binary back as assembly, and `yacc` and `lex`
+with their skeletons. Twelve of the toolchain's programs are the same source code as the
+cross-tools that build the system on your workstation, and they produce identical output — the
+machine's own assembler and linker reproduce the whole kernel, byte for byte.
 
 What is **not** there yet is a C compiler on the machine. `cc` preprocesses, assembles and
 links; it does not compile C, and says so plainly. Cross-compiling C from a modern host works
@@ -72,20 +72,26 @@ is the program above, ready to build.
 ## What works
 
 - **Multi-user Unix.** `init` runs the boot script and puts a `login:` prompt on both Consul
-  typewriters; two people log in at once, see each other in `who` and `write` to one another.
-  `passwd`, `su` and `newgrp` do what they always did. Terminals are eight-bit and handle
-  UTF-8, so Cyrillic prints correctly.
+  typewriters; two people log in at once, see each other in `who`, `write` to one another and
+  send `mail`. `passwd`, `su` and `newgrp` do what they always did. Terminals are eight-bit and
+  handle UTF-8, so Cyrillic prints correctly.
 - **The kernel.** Memory management, processes, signals, pipes, swapping, shared program text,
   the v7 system calls. It runs on real simulated hardware — MMU, drums, disks, the console.
 - **A filesystem you can look after.** `mkfs` makes one on a second drive, `mount` attaches
   it, `fsck` repairs a damaged one, `tar` archives the tree, `df` and `du` measure it.
-- **92 programs.** The shell and its scripts, the file commands, two dozen text filters
-  (`grep`, `sed`, `sort`, `diff`, `tr`, …), two editors — `ed` and the full-screen `novi` —
-  the system-inspection set (`ps`, `vmstat`, `iostat`, `dmesg`), and the toolchain above.
+- **112 programs.** The shell and its scripts, the file commands, two dozen text filters
+  (`grep`, `sed`, `awk`, `sort`, `diff`, `tr`, …), two editors — `ed` and the full-screen
+  `novi` — the calculators (`bc`, `dc`, `units`, `expr`), `make`, `m4` and `crypt`, the
+  system-inspection set (`ps`, `vmstat`, `iostat`, `dmesg`), and the toolchain above.
+- **Two daemons and the jobs they run.** `update` flushes the buffer cache, `cron` reads
+  `/usr/lib/crontab`, and `at` queues a one-off job for `atrun` to pick up.
+- **The manual, on the disk.** All 205 pages are staged as `/usr/man/man<N>/`; `man` finds one,
+  `manview` formats it and `more` pages the output.
 - **The C library.** libc, libm, libtermcap and libcurses, cross-built and tested under a
   user-level simulator on the host.
 
-Everything above is built and most of it is tested: `make run` is the whole suite.
+Everything above is built and most of it is tested: `make run` is the whole suite, some 2,180
+cases across the cross-tools, the libraries, the staged programs and the booted kernel.
 
 ## What is missing
 
@@ -107,9 +113,10 @@ plan left**; their references are [cmd/README.md](cmd/README.md) and
 kernel/        the v7 kernel and its device drivers
 include/       the system headers
 lib/           libc, libm, libtermcap, libcurses
-cmd/           the toolchain, and the ~90 programs that go on the disk image
+cmd/           the toolchain, and the 112 programs that go on the disk image
 etc/           the static files of the image: passwd, group, motd, rc, ttys, termcap
 root.manifest  how all of that is assembled into the root filesystem
+test.manifest  a second pack, /test/*, that the library tests run from
 doc/           BESM-6 architecture and toolchain references
 ```
 

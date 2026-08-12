@@ -15,10 +15,10 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 
 **The narrative lives in the per-directory READMEs, and that is where to look before touching
 anything**: `kernel/README.md` and `doc/Besm6_Kernel_Reference.md` (memory model, hardware
-rules), `cmd/README.md` (the porting recipe, the task numbers other files cite, and the table of
-what was refused), and most `cmd/<prog>/`. Two things are external: the C
-cross-compiler <https://github.com/besm6/c-compiler/>, supplying `libruntime.a`'s `b$*` helpers
-and the ten freestanding headers, and SIMH <https://github.com/besm6/simh/tree/master/BESM6/>.
+rules), `cmd/README.md` (the twelve-point porting recipe and the table of what was refused), and
+most `cmd/<prog>/`. Two things are external: the C cross-compiler
+<https://github.com/besm6/c-compiler/>, supplying `libruntime.a`'s `b$*` helpers and the ten
+freestanding headers, and SIMH <https://github.com/besm6/simh/tree/master/BESM6/>.
 
 ## Building
 
@@ -59,25 +59,14 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 92 free blocks of 2000** — it had 181
-until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
-`/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14,
-`/bin/m4` 19, `/bin/make` 24, `/bin/dc` 32, `/bin/bc` 20 with one more for
-`/usr/lib/lib.b`, `/bin/units` 14 with three for `/usr/lib/units`, `/bin/awk` 42, and
-`/bin/crypt` 7 with 3 for `/usr/lib/makekey` and **5 more for `/bin/ed`**, whose restored
-`-x` links `crypt(3)` and `getpass(3)` and so stdio with them, `/etc/update` **1**,
-`/bin/at` plus `/usr/lib/atrun` **28**, three of which are the `/usr/spool/at` directories,
-and `/etc/cron` plus `/usr/lib/crontab` **10**, one of which is `/etc/rc` growing a block, and
-`/bin/mail` **18**, of which the program is 16, one is the `/usr/spool/mail` directory it
-delivers into, and one is its own manual page crossing a block boundary as C28 corrected it, and
-`calendar` **42** — the largest single addition there has been, of which the two programs are 9,
-the `/usr/lib/calendars` directory 1, the manual page 1, and **29 the database**, which is data
-v7 never had and which C23 chose whole over a four-file subset because eight files cover 362 days
-of the year and four cover 114, and **C24 `6` for no new program at all** — seven directory
-readers moved onto `opendir(3)`, of which `/bin/sh` alone is 1,028 words because `opendir()` calls
-`malloc()` and the shell had never linked an allocator.
-**Take the number from a build** — `b6fsutil` prints it — rather than from this sentence,
-which C22 found to be one out.
+`cmd/README.md` §6 is the account.
+
+**The root image has 92 free blocks of 2000**, and the test pack 1,686 of its own. **Take the
+number from a build** — `b6fsutil` prints it on every `root.img` — rather than from this
+sentence, which has drifted before. Budget more than the program: a directory it needs is a
+block, a program past 6 blocks pays an indirect block too, a data file can dwarf the program
+(`calendar` is 42 blocks, 29 of them the database), and an edit to a file already on the image
+can cross 3072 bytes and cost a block that looked free. `cmd/README.md` §7 is the account.
 
 **Twelve programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc`, `yacc`, `lex` — as the host `b6*` tools and, from the same sources under
@@ -111,9 +100,10 @@ having no `O_CREAT` and no `O_EXCL`.
 
 `build/rootfs/` is staged only, never installed, and also carries
 `/lib/{crt0.o,libc.a,libruntime.a}`, `/usr/include` and `/usr/man` through the top-level
-`CMakeLists.txt`'s `B6_STAGE_*` lists. **`root.manifest`** at the tree top describes the image;
-paths resolve against `b6fsutil`'s working directory (`build/kernel/test`), and modes (seven
-setuid) and the one hard link (`/bin/[` → `/bin/test`) live there rather than in the staging
+`CMakeLists.txt`'s `B6_STAGE_*` lists (`/usr/man` is 205 pages). **`root.manifest`** at the tree
+top describes the image; paths resolve against `b6fsutil`'s working directory
+(`build/kernel/test`), and modes (seven setuid) and the four hard links (`/bin/[` → `/bin/test`,
+`/bin/less` → `/bin/more`, `egrep.1`/`fgrep.1` → `grep.1`) live there rather than in the staging
 tree.
 
 **There are two disks.** `build/testfs/` is the second staging tree and **`test.manifest`**
@@ -129,7 +119,7 @@ C11** — no implicit `int`, no K&R parameter lists — but what bites is that v
 `char *` are the same thing: a flag packed into bit 0 of a pointer, a mask rounding to a word
 assuming `BYTESPERWORD`, pointer casts that *floor* rather than round. Also: `long` is one
 word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18. **`opendir(3)` is how
-a pathname is walked** and since C24 there is no other reader in the tree, so hand-rolling
+a pathname is walked** and there is no other reader in the tree, so hand-rolling
 `<sys/dir.h>` is a regression, not a shortcut — `readdir()` skips the `d_ino == 0` slot and
 terminates the name, which a raw `char d_name[DIRSIZ]` is **not**. `<sys/dir.h>` is for the five
 programs holding a raw disk block rather than a directory: `fsck`, `mkfs`, `ncheck`, `dcheck`,
@@ -170,16 +160,17 @@ copy.
   test pack and runs `/mnt/test/coret`. `multi` is also the worked example for typing at the
   guest and for driving the second Consul, which needs the host program
   `kernel/test/ttyhost.c`. When a README claims `fsck` repairing a pack, the swapper under
-  pressure or the self-hosting `cc` run is covered, it describes one of the eighteen tests
-  that no longer exist.
+  pressure or the self-hosting `cc` run is covered, it describes one of the eighteen booting
+  tests that no longer exist.
 - The libc suite runs under `b6sim` only; adding a program = a `b6_libtest()` call +
   `lib/test/progs.cmake` + `test.manifest`. **A native test that is not a libc test wants the
   cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
   `build/rootfs/test/` (`cmd/novi/test/`, `cmd/libaout/rootfs/`); it can link sources
   `b6_libtest()` cannot, that one compiling exactly one `.c`.
-- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks) and `sh`. Every `cmd/`
-  tool has a GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full C11 (N1570)
-  conformance suite.
+- ctest labels: `kernel` (SIMH), `lib` (b6sim), `cmd` (`b6_progtest`, a staged program under
+  b6sim), `rootfs` (size checks), `man` (page lint) and `sh`. Every `cmd/` tool has a
+  GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full C11 (N1570) conformance
+  suite. The whole run is about 2,180 cases.
 - **A lone unexpected failure is usually the harness, not the change.** The suite runs in
   parallel and both simulators are timing-sensitive, so a case that fails under `make run` and
   passes on its own was a flake. Re-run it alone, then move on.
