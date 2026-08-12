@@ -235,7 +235,7 @@ than at its call sites — is written up **once**, in the block comment at `xswa
 
 ## The tests
 
-These cover the image the build produces ([../root.manifest](../root.manifest) →
+These cover the image the build produces ([../scripts/root.manifest](../scripts/root.manifest) →
 `root3072.disk`), each going one step past the last, which is what keeps the diagnosis apart.
 
 | test | asserts |
@@ -246,7 +246,7 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 | `core` | the test pack mounted on `/mnt`, then one user program (`/mnt/test/coret`) typed at that prompt: `core()` dumping a real image and `ptrace(2)` reaching a real stopped child — the two places the kernel builds a user address out of an integer |
 
 `boot` attaches the pristine disk read-only — an assertion in itself; `multi` and `core` write the
-root, so each converts a copy of its own. The **test pack** ([../test.manifest](../test.manifest) →
+root, so each converts a copy of its own. The **test pack** ([../scripts/test.manifest](../scripts/test.manifest) →
 `test3077.disk`) is the second filesystem, carrying the `lib/test` programs as `/test/*`; it is
 attached `-r` on `md01` and mounted `-r`, so one copy serves every test and only `core` wants it.
 Nothing mounts it automatically — `/etc/rc` has no line for it, deliberately. All three are **`RUN_SERIAL`**: they type at the guest on a step

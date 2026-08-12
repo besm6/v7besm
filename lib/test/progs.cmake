@@ -1,11 +1,11 @@
 # The library test programs that go on the TEST PACK, as /test/<name> -- /mnt/test/<name>
 # once the kernel has mounted it.  They were /usr/test on the root image until the pack
-# existed; ../../test.manifest's header is the account of why they moved.
+# existed; ../../scripts/test.manifest's header is the account of why they moved.
 #
 # ONE LIST, TWO CONSUMERS, and they are configured in different directories: this one
 # (lib/test/CMakeLists.txt) links and stages them into build/testfs/test/, and
 # kernel/test/CMakeLists.txt names them in TESTFS_FILES -- the dependency list that makes
-# editing a test source rebuild test.img.  A third consumer, ../../test.manifest, is a static
+# editing a test source rebuild test.img.  A third consumer, ../../scripts/test.manifest, is a static
 # file and says the same names by hand; nothing but the manifest's own grammar can be
 # generated for it.
 #

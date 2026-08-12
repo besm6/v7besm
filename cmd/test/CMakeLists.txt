@@ -7,7 +7,7 @@
 # build/rootfs/bin/test.  Added from inside the top-level libruntime guard, after lib/, and
 # not with the other cmd/ subdirectories.
 #
-# IT GOES ON THE IMAGE TWICE, under one inode: ../../root.manifest links /bin/[ to /bin/test,
+# IT GOES ON THE IMAGE TWICE, under one inode: ../../scripts/root.manifest links /bin/[ to /bin/test,
 # which is the first hard link that manifest has ever carried.  Nothing in this file does
 # that -- a link is not a staged file and b6_prog() knows nothing about it -- so the
 # rootimg_link test in ../../kernel/test/CMakeLists.txt is what holds it.  See README.md.

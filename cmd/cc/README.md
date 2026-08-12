@@ -258,7 +258,7 @@ The link line has to have something to name, so C9e put the other two thirds of 
 system on the image beside the toolchain: `/lib/{crt0.o,libc.a,libruntime.a}` and the whole
 system header tree at `/usr/include`. Both are staged by the top-level
 [CMakeLists.txt](../../CMakeLists.txt) (the `B6_STAGE_*` lists) and listed in
-[root.manifest](../../root.manifest); `kernel/test/CMakeLists.txt` hangs `root.img` on the same
+[root.manifest](../../scripts/root.manifest); `kernel/test/CMakeLists.txt` hangs `root.img` on the same
 lists, so a file staged and not listed cannot slip through.
 
 `/lib` is **exactly what the default link line names** and nothing more. `libm.a`,

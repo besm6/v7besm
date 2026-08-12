@@ -14,7 +14,7 @@
 // more(1) in the v7 tree at all, this being Berkeley's, so it is the second program
 // under cmd/ that is not a port of a v7 command.  cmd/novi is the first.
 //
-// ALSO INSTALLED AS /bin/less, a hard link to the same inode (../../root.manifest).
+// ALSO INSTALLED AS /bin/less, a hard link to the same inode (../../scripts/root.manifest).
 // Nothing here looks at argv[0]: upstream's `page' alias did, and went with it.
 #include <errno.h>
 #include <fcntl.h>

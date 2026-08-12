@@ -18,7 +18,7 @@ if (EQ(argv[0], "[")) {
 
 Without the second name that branch is unreachable code and `[ -f x ]` in a script is a
 command not found. So the link is part of the port, not a convenience — and it is the **first
-hard link [../../root.manifest](../../root.manifest) has ever carried**:
+hard link [../../scripts/root.manifest](../../scripts/root.manifest) has ever carried**:
 
 ```
 link /bin/[

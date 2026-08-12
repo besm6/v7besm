@@ -9,7 +9,7 @@
 // account of why.  v7's ps.c is 408 lines of which perhaps forty are the report; the rest
 // is a route to the data that has no counterpart here:
 //
-//   it nlist()s /unix, and there is no /unix on this image -- ../../root.manifest names no
+//   it nlist()s /unix, and there is no /unix on this image -- ../../scripts/root.manifest names no
 //   kernel and kernel/unix.ini has the SIMULATOR load one off the build host;
 //   it then applies a hard-coded relocation fudge, `n_value - 0x7fc00000 + 0x10000';
 //   it reads the proc table by sequential read() off /dev/mem;

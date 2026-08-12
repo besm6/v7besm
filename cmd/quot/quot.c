@@ -68,7 +68,7 @@
 //
 // AND ONE THING LEFT AS v7 WROTE IT, deliberately: the accumulators are not cleared between
 // filesystems, so `quot a b' reports running totals.  There is one filesystem on this
-// machine (../../root.manifest: one EC-5052, no partitions), so the case cannot arise, and
+// machine (../../scripts/root.manifest: one EC-5052, no partitions), so the case cannot arise, and
 // inventing a divergence for it would be a change nothing can test.
 //
 // NOT SETUID.  /dev/rmd0 is mode 0600 because that one node is every file's contents;

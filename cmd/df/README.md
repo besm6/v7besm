@@ -71,7 +71,7 @@ other. Given a block name, `df` opens the **raw twin** — `/dev/md1` through `/
 that a bare `df` still takes the path the four conditions below are about.
 
 **The fallback to the block device is load-bearing and has a live case.**
-`kernel/test/mount.sh` runs `df /dev/md3`, and [../../root.manifest](../../root.manifest)
+`kernel/test/mount.sh` runs `df /dev/md3`, and [../../scripts/root.manifest](../../scripts/root.manifest)
 stages `rmd0` and `rmd1` and no other raw node. That one falls back, and a block read goes
 through `readi()` and the buffer cache, where none of the four conditions bind. Staging
 `/dev/rmd2`…`rmd7` for one test would have been the worse trade.

@@ -289,7 +289,7 @@ and there is **no second copy of any source** — only the size profile differs.
 through `b6_yacc()` there rather than through this directory's own custom command, that helper
 existing inside the `libruntime` guard. The skeleton is staged beside the binary because
 `find_form()`'s `besm6` arm names `/usr/lib/lex/ncform` and has no second candidate; both files
-have a stanza in [`../../root.manifest`](../../root.manifest), and `/usr/lib/lex` is a directory
+have a stanza in [`../../scripts/root.manifest`](../../scripts/root.manifest), and `/usr/lib/lex` is a directory
 that had to be made there.
 
 **The heap is what binds, not `rootfs_lex_size`.** Nearly every table lex owns is `calloc`'d, so

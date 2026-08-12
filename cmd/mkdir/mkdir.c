@@ -13,7 +13,7 @@
 //
 // and all three are gated on suser() in this kernel (mknod in kernel/sys2.c, link's
 // directory arm beside it), which is why /bin/mkdir is SET-USER-ID ROOT on the image --
-// `mode 04755' in ../../root.manifest, the first setuid entry there.  cmd/mkdir/README.md is
+// `mode 04755' in ../../scripts/root.manifest, the first setuid entry there.  cmd/mkdir/README.md is
 // the account of what that costs and how it is asserted; the short of it is that the program
 // itself makes the only permission check that matters, `access(pname, W_OK)' on the parent,
 // and access(2) asks about the REAL uid.  So the caller must already be able to write the

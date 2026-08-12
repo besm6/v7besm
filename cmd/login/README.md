@@ -27,7 +27,7 @@ privileged call happened.
 
 **It is not setuid**, and that is not an oversight. The privilege is *inherited* — `getty` is
 `init`'s child and already root — rather than borrowed, so 0755 is what the v7 reference tree
-ships and what [root.manifest](../../root.manifest) says. v7's manual page claims `login` "may
+ships and what [root.manifest](../../scripts/root.manifest) says. v7's manual page claims `login` "may
 be used at any time to change from one user to another"; that use needs the setuid bit, and the
 command for it is `su`, which is task C6's.
 
@@ -104,7 +104,7 @@ with a task of its own — two of them now, the third having been answered:
   is in no task, and a file appended to on every getty respawn with no reader is not worth
   carrying. It belongs with the accounting commands, task C8.
 * **`/usr/spool/mail`** — **no longer one of them.** Task C28 put `mail(1)` on the image and
-  `../../root.manifest` the directory with it, so this probe finds something and `You have mail.`
+  `../../scripts/root.manifest` the directory with it, so this probe finds something and `You have mail.`
   prints for the first time. It is the only line of `login` whose reader arrived after it did.
 * **`/usr/bin`** — named by the PATH `login` exports, which is v7's string kept verbatim. The
   shell's own default already reaches `/bin`.

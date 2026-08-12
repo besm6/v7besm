@@ -262,7 +262,7 @@ a header here. There is no `m4.h`, so §1's build blind spot never arises.
 * **`m4: no space for alloc`** — §6's uncheckable heap ceiling — and **`m4: cannot create temp
   file`**, which wants 26 pre-existing `/tmp/m4a*`.
 * **The image's own `/tmp`.** The diversions land in the *host's* `/tmp` under `b6sim`. That
-  `/tmp` exists on the disk at mode 0777 is asserted by [../../root.manifest](../../root.manifest),
+  `/tmp` exists on the disk at mode 0777 is asserted by [../../scripts/root.manifest](../../scripts/root.manifest),
   not by these cases.
 * **A file name containing a space, or an empty one**: `.args` is split on whitespace with no
   quoting. Only four cases here name a file at all, the rest being `.in` files fed verbatim, so

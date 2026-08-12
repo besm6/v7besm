@@ -86,7 +86,7 @@ get_filename_component(B6LIBDIR ${B6LIBRUNTIME} DIRECTORY)
 
 # Where b6_prog() stages the native user programs, and where their libc comes from.  The
 # staging tree is a root filesystem in the making -- build/rootfs/etc/init is what ends up
-# as /etc/init on the disk image (root.manifest, at the top of the tree) -- so nothing but files bound
+# as /etc/init on the disk image (root.manifest, beside this file) -- so nothing but files bound
 # for the image may be written into it; the .nm/.dis listings stay in the build dir.
 # Both are overridable, so a standalone `cmake -S lib' with its own binary tree, or a
 # caller staging elsewhere, is not forced into this layout.
@@ -95,7 +95,7 @@ if(NOT DEFINED B6_ROOTFS)
 endif()
 
 # And the staging tree of the SECOND filesystem, the test pack: build/testfs/test/hello is
-# /test/hello on test.img (test.manifest, beside root.manifest) and /mnt/test/hello once it is
+# /test/hello on test.img (test.manifest, beside this file) and /mnt/test/hello once it is
 # mounted.  A tree of its own rather than a corner of B6_ROOTFS, so that B6_ROOTFS goes on
 # meaning exactly what the root image holds.  Only lib/test/ stages into it; b6_prog() does
 # not, and its DEST is still relative to B6_ROOTFS.

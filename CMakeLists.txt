@@ -134,7 +134,7 @@ if(B6RUNTIME_LIB)
 
     #
     # The staged root filesystem, build/rootfs/ -- the tree that becomes the disk image the
-    # kernel mounts (root.manifest, at the top of the tree).  `rootfs' is the aggregate every
+    # kernel mounts (scripts/root.manifest).  `rootfs' is the aggregate every
     # b6_prog() hangs itself on; the programs come after lib/, since each links against its libc.
     #
     # ALL, so that a plain `make' stages the whole tree.
@@ -143,7 +143,7 @@ if(B6RUNTIME_LIB)
     #
     # ...and build/testfs/, the staging tree of the SECOND filesystem: the lib/test programs,
     # which used to be /usr/test on the root image and are now /test on a pack of their own
-    # (test.manifest, beside root.manifest).  `testfs' is to lib/test what `rootfs' is to
+    # (scripts/test.manifest, beside root.manifest).  `testfs' is to lib/test what `rootfs' is to
     # cmd/: the aggregate every stager hangs itself on.
     #
     # DECLARED BEFORE add_subdirectory(lib), because that is where the only stager is and it
@@ -171,7 +171,7 @@ if(B6RUNTIME_LIB)
     # from lib/libc, and libruntime.a from the external c-compiler beside it.
     # libm.a, libcurses.a and libtermcap.a are deliberately NOT here -- some 40
     # blocks for archives nothing on this image links -- and adding one is a line
-    # here and a stanza in root.manifest.
+    # here and a stanza in scripts/root.manifest.
     #
     # The header tree has TWO OWNERS, as install(DIRECTORY include/) below records:
     # the hosted half is this repo's and is staged from the SOURCE tree, so an edit
@@ -211,7 +211,7 @@ if(B6RUNTIME_LIB)
     # a .umm FIXTURE under some cmd/<x>/test/ would belong in that corpus and must not thereby
     # land on the disk.  The two sets coincide and are allowed to diverge in that direction.
     # Like every file(GLOB) here it runs at CONFIGURE time: a new page needs a re-configure,
-    # exactly as a new header does, and a stanza in root.manifest besides.
+    # exactly as a new header does, and a stanza in scripts/root.manifest besides.
     #
     set(B6_STAGE_MAN "")
     set(_staged_man "")

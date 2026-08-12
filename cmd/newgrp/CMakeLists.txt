@@ -6,7 +6,7 @@
 # gate is available.  done() hands the privilege straight back with setuid(getuid()) before
 # it execs the shell.
 #
-# The bit is one line of ../../root.manifest and nothing else (../README.md §8).
+# The bit is one line of ../../scripts/root.manifest and nothing else (../README.md §8).
 #
 # NO b6sim TESTS, and there is no test/ subdirectory.  ../README.md §9: /etc/group and
 # /etc/passwd there are the BUILD MACHINE's, and every path in this program ends in an

@@ -71,7 +71,7 @@ int main(void)
     //
     // §7.22.4.8's null-pointer case, which spawn.c deliberately leaves alone because the
     // answer there is a question about the host.  Here it is a question about the image,
-    // and the answer is fixed: /bin/sh is on it, mode 0755 (../../root.manifest).
+    // and the answer is fixed: /bin/sh is on it, mode 0755 (../../scripts/root.manifest).
     //
     printf("command processor %d\n", system((char *)0));
 

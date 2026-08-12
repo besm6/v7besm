@@ -7,7 +7,7 @@
 # filesystem the kernel mounts.  Added from inside the top-level libruntime guard, after
 # lib/, and not with the other cmd/ subdirectories.
 #
-# THE SETUID BIT IS NOT SET HERE; ../../root.manifest is where this program's `mode 04755'
+# THE SETUID BIT IS NOT SET HERE; ../../scripts/root.manifest is where this program's `mode 04755'
 # lives, as it is for mkdir.  See ../mkdir/README.md.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is

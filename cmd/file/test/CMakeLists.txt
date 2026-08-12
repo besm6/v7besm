@@ -12,7 +12,7 @@
 #   execbin   ${B6_ROOTFS}/bin/file itself -- FMAGIC with RELFLG set and a symbol table
 #   stripbin  ... the same, through b6strip, so `not stripped' has to disappear
 #   purebin   ${B6_ROOTFS}/bin/sh -- the only NMAGIC program on the root image; the
-#                 other is /mnt/test/puret, on the test pack (../../../test.manifest)
+#                 other is /mnt/test/puret, on the test pack (../../../scripts/test.manifest)
 #   objbin    crt0.o -- FMAGIC WITHOUT RELFLG, which is the distinction v7's file could
 #                 not draw at all
 #   archbin   libc.a -- ARMAG, whose value is v7's and whose width is not

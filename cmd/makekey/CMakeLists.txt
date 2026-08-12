@@ -7,7 +7,7 @@
 # and a wait.  This is still the filter makekey.8 describes, for anything a user writes.
 #
 # makekey.8.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and
-# ../../root.manifest has carried its stanza since before the program did.
+# ../../scripts/root.manifest has carried its stanza since before the program did.
 #
 # NOT SETUID (../README.md §8): it transforms what it is handed and holds no secret of its
 # own.  NO stdio, so it is a fraction of the size of a program that has one.

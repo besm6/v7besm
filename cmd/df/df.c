@@ -146,7 +146,7 @@ _Static_assert(PGSZ % MDALIGN == 0, "a page must be a whole number of MDALIGNs")
 
 // The root's special file.  A #define and not a `char *' in a table, because a string literal
 // cannot initialise a char * inside a struct initialiser on this compiler (../README.md).
-// rootdev is makedev(0, 0) -- ../../root.manifest, bdevsw[0] -- there is one EC-5052 drive and
+// rootdev is makedev(0, 0) -- ../../scripts/root.manifest, bdevsw[0] -- there is one EC-5052 drive and
 // there are no partitions, and the kernel exports no way to ask which device it booted from.
 #define ROOTSPEC "/dev/md0"
 #define ROOTDIR  "/"

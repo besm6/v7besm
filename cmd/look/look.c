@@ -32,7 +32,7 @@
 //
 // THE DEFAULT DICTIONARY IS ON THE IMAGE, and putting it there is what makes the bare
 // `look word' form mean anything.  /usr/dict/words here is a small sorted list -- see
-// words in this directory, and ../../root.manifest -- and not v7's 25,000-entry one, which
+// words in this directory, and ../../scripts/root.manifest -- and not v7's 25,000-entry one, which
 // is not in this tree.  Two consequences, and the second is ../README.md §9's rule in its
 // purest form:
 //

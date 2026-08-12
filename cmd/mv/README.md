@@ -30,7 +30,7 @@ super-user**:
 | `link(source, target)` | `if ((ip->i_mode & IFMT) == IFDIR && !suser())` in `link()`, [`kernel/sys2.c`](../../kernel/sys2.c) |
 | `unlink(source)`, `unlink("target/..")` | the same arm of `unlink()`, [`kernel/sys4.c`](../../kernel/sys4.c) |
 
-So `/bin/mv` is `mode 04755` in [`root.manifest`](../../root.manifest), beside `/bin/mkdir` and
+So `/bin/mv` is `mode 04755` in [`root.manifest`](../../scripts/root.manifest), beside `/bin/mkdir` and
 `/bin/rmdir`. [`cmd/mkdir/README.md`](../mkdir/README.md) is the general account of what that
 bit costs and how `b6fsutil` carries it; none of it is repeated here.
 

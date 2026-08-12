@@ -53,7 +53,7 @@ under **-r**, whether to examine each directory.
 **Note:** *rmdir* is **set-user-id to root** on this system, for mkdir(1)'s reason turned
 round: there is no *rmdir* system call, the directory is taken apart with three unlink(2)s - of
 `name/..`, `name/.` and *name* itself - and *unlink* of a directory is refused to anyone but
-the super-user. The bit is granted in *root.manifest* at the top of the source tree, as mode
+the super-user. The bit is granted in *scripts/root.manifest* in the source tree, as mode
 04755\. As in *mkdir*, the permission that actually decides is the program's own access(2) check
 on the parent, made against the **real** user id.
 

@@ -8,7 +8,7 @@
 # lib/, and not with the other cmd/ subdirectories.
 #
 # rm IS NOT SETUID, and does not need to be: `rm -r' removes an emptied directory by execing
-# /bin/rmdir, which is (see ../../root.manifest).
+# /bin/rmdir, which is (see ../../scripts/root.manifest).
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

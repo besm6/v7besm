@@ -9,7 +9,7 @@
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
 # added /usr/test, the lib/test programs that b6sim also runs, and the termcap and curses
 # ports added three more beside them; ALL OF THAT HAS SINCE LEFT for a filesystem of its own
-# (../test.manifest), leaving /etc/termcap, which they read and which stays here.
+# (test.manifest), leaving /etc/termcap, which they read and which stays here.
 # Task C1a (cmd/README.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
 # to carry a mode the staging tree cannot express: they are SETUID ROOT.  Task C1b added
 # /bin/{cp,ln,mv,rm} and a third setuid program in mv, and task C1c added
@@ -26,7 +26,7 @@
 # the manual in the dialect doc/Manual_Page_Format.md describes -- together with the
 # /usr/bin/man that finds them, and task C25a the /usr/bin/manview that formats one.
 #
-# WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
+# WHY THIS FILE LIVES IN scripts/ and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
 # build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/getty, cmd/login,
 # cmd/{basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,
@@ -58,7 +58,7 @@
 # Four tests read this image: fstest, which checks the superblock and the root inode below the
 # boot path, and boot, multi and core, which boot a kernel against it -- boot read-only at
 # volume 3072, the other two off writable copies at 3085 and 3086.  The second filesystem is
-# ../test.manifest's and is a separate matter.
+# test.manifest's and is a separate matter.
 #
 # THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
 # row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 rmd, 4 rmb).
@@ -72,7 +72,7 @@
 # EC-5052 drive is 2000 blocks and swap lives on the drums (/dev/swap, block major 1).
 #
 # SINCE TASK C4c THERE ARE TWO DRIVES' WORTH OF NODES, md0/rmd0 and md1/rmd1, and md1 is now
-# the one with a standing job: the test pack (../test.manifest) is attached there and mounted
+# the one with a standing job: the test pack (test.manifest) is attached there and mounted
 # on /mnt.  The raw twin is what /etc/mkfs writes a filesystem onto.  A node for a drive nobody
 # attached is not an error -- mdopen() accepts any minor below 64 and the refusal comes at the
 # first transfer -- so neither costs anything on a boot that attaches only md00.
@@ -170,7 +170,7 @@ mode 0777
 dir /lost+found
 
 # mount(1M)'s target, task C4f, and since the test pack arrived it has a tenant:
-# `/etc/mount /dev/md1 /mnt -r' puts the lib/test programs here as /mnt/test/* (../test.manifest).
+# `/etc/mount /dev/md1 /mnt -r' puts the lib/test programs here as /mnt/test/* (test.manifest).
 # It has to exist and it has to be EMPTY of anything anybody wants: mounting covers it, and
 # whatever is underneath is unreachable until the unmount.  It also has to be nobody's working
 # directory when the mount happens -- smount() refuses a mount point whose inode is held more
@@ -1118,7 +1118,7 @@ source ../../rootfs/etc/termcap
 mode 0644
 
 # THE LIBRARY TEST PROGRAMS ARE NOT HERE ANY MORE.  lib/test/*.c were /usr/test from task 25c
-# until the test pack took them (../test.manifest); they are /mnt/test/* now.  What that leaves
+# until the test pack took them (test.manifest); they are /mnt/test/* now.  What that leaves
 # behind is /bin/sh as the only PURE (NMAGIC) image on this disk -- puret was the other.
 
 file /usr/bin/cpp       # cmd/cpp built natively -- task C9a, the first step of self-hosting
@@ -2738,7 +2738,7 @@ major 0
 minor 0
 mode 0600
 
-# THE TEST PACK'S DRIVE (../test.manifest), and the only one besides the root that anything
+# THE TEST PACK'S DRIVE (test.manifest), and the only one besides the root that anything
 # attaches.  Mode 0600 and root's IS the whole privilege story for mount(1M), which is not
 # setuid: mount(2) calls no suser() and gates on the mode of the special file, as v7 did.  It
 # must be the BLOCK node -- getmdev() insists on IFBLK, so /dev/rmd1 answers ENOTBLK.

@@ -9,7 +9,7 @@
 #
 # THE SETUID BIT IS NOT SET HERE.  Nothing in the build tree carries a mode: build/rootfs/ is
 # an ordinary staging directory, and every permission the image has comes from
-# ../../root.manifest, where this program's stanza says `mode 04755'.  See README.md, and
+# ../../scripts/root.manifest, where this program's stanza says `mode 04755'.  See README.md, and
 # ../mkdir/README.md for the general account.
 #
 # mv execs /bin/cp when a move crosses a device, so cmd/cp is staged first (task C1b).

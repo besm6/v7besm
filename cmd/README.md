@@ -254,7 +254,7 @@ Where a fixed buffer can be sized so that nothing has to test it, do that instea
    in several processes at once; it costs a page-aligned data segment.
 2. `add_subdirectory(cmd/<x>)` in [../CMakeLists.txt](../CMakeLists.txt), **inside the
    `libruntime.a` guard and after `add_subdirectory(lib)`**.
-3. A stanza in [../root.manifest](../root.manifest): `mode`, `file /bin/<x>`, `source
+3. A stanza in [../scripts/root.manifest](../scripts/root.manifest): `mode`, `file /bin/<x>`, `source
    ../../rootfs/bin/<x>`. Paths resolve against `b6fsutil`'s working directory
    (`build/kernel/test`), not against the manifest.
 4. A line in [../etc/rc](../etc/rc) if the boot script wants it — `/etc/rc` runs with **no
@@ -413,7 +413,7 @@ which is what the dialect is for: `man - ls` shows the file itself, and `man ls`
 
 **A new page costs two edits, not none.** `B6_STAGE_MAN` in the top-level
 [../CMakeLists.txt](../CMakeLists.txt) globs `cmd/*/*.umm` at *configure* time, so a new page needs
-a re-configure to be staged and a stanza in [../root.manifest](../root.manifest) to reach the disk.
+a re-configure to be staged and a stanza in [../scripts/root.manifest](../scripts/root.manifest) to reach the disk.
 Nothing fails if you skip them; the page simply is not there.
 
 **A v7 program you port arrives with a roff page.** [man2umm/README.md](man2umm/README.md) is the
@@ -496,7 +496,7 @@ notices on its own.
 | `adb/` | 3,547 | PDP-11 instruction decoding, core files and `ptrace` semantics. A BESM-6 debugger is **new work**, not a port; [disasm/](disasm/) plus `ptrace(2)` is where it would start, and `ptrace`'s single-step is **refused with `EIO`** — the breakpoint contract to settle first is in [../doc/Besm6_Kernel_Reference.md](../doc/Besm6_Kernel_Reference.md). |
 | `lint/`, `mip/`, `struct/`, `ratfor/` | 1,164 + 7,615 + 4,721 + 1,200 | `lint` and `mip` are the PDP-11 C compiler's own internals; `struct`/`ratfor` are Fortran tooling with no Fortran here — which is also why lex's `nrform` was dropped. |
 | `osh.c` | 846 | The pre-Bourne shell. [sh/](sh/) supersedes it. |
-| `mknod.c` | 44 | **There is no `mknod(2)` in this kernel.** Every device node is made by `b6fsutil` from [../root.manifest](../root.manifest), which is where a new one is added. |
+| `mknod.c` | 44 | **There is no `mknod(2)` in this kernel.** Every device node is made by `b6fsutil` from [../scripts/root.manifest](../scripts/root.manifest), which is where a new one is added. |
 | `prof.c` | 310 | Reads a `mon.out` that nothing produces: the kernel decided against profiling, `profil(2)` **refuses** with `EINVAL`, there is no `monitor`/`mcount` in libc and `cc` has no `-p`. `b6sim` profiles a program today with no kernel help. |
 | `cb.c`, `diff3.c`, `tabs.c` | 366 + 423 + 196 | Curiosities with a real cost and no caller. `cb` is superseded by clang-format; `diff3` wants a merge nobody does here; `tabs` sets hardware tab stops on terminals this machine does not have. |
 | `cc.c`, `as/`, `ld.c`, `nm.c`, `ar.c`, `size.c`, `strip.c`, `ranlib.c`, `arcv.c` | | PDP-11 `a.out`, opcodes and registers; nothing survives retargeting. The BESM-6 tools were written for this repo instead, and twelve of them are built a second time for the machine itself — see each tool's "Building for the BESM-6". |

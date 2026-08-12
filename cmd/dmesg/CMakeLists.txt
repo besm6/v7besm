@@ -3,7 +3,7 @@
 # IN /bin AND NOT /etc, which is where v7 kept it.  v7's dmesg opened /dev/kmem and needed
 # root; this one asks kctl(2) for the value of msgbuf and msgbufp and opens nothing at all,
 # so it is an ordinary user command and is placed as one.  That is a divergence and it is
-# recorded here and in ../../root.manifest.
+# recorded here and in ../../scripts/root.manifest.
 #
 # NOT SETUID: kctl(2) is unprivileged by design (../../include/sys/kctl.h).
 #

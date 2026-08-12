@@ -10,7 +10,7 @@
 # caller named, or a world-readable one, and needs no privilege (../README.md SS8).
 #
 # units.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and
-# ../../root.manifest has carried its stanza since before the program did.  This task adds
+# ../../scripts/root.manifest has carried its stanza since before the program did.  This task adds
 # the binary and the table.
 #
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is

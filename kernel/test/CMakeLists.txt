@@ -124,7 +124,7 @@ b6_test(fstest   crt0 fstest bio md alloc intr utab brz)
 # program, which is why `_start' must be its first text word -- b6ld takes a_entry from
 # the start of text unless told otherwise (cmd/ld/output.c).
 #
-# IT IS NO LONGER ON THE DISK IMAGE and no test drives it.  Task 25b made ../../root.manifest
+# IT IS NO LONGER ON THE DISK IMAGE and no test drives it.  Task 25b made ../../scripts/root.manifest
 # name the real cmd/init, and kernel/test/console now holds its dialogue with /bin/sh
 # instead.  coninit is still BUILT, and deliberately: it is the only user program on this
 # system that links neither crt0 nor libc, so when the console dialogue breaks it is what
@@ -216,7 +216,7 @@ set(ROOTTIME 1784967780)
 # own header says so, and says why b6fsutil's working directory stayed put anyway.  Named
 # by a path relative to THIS directory so that a standalone `cmake -S kernel' still
 # configures.
-get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.manifest ABSOLUTE)
+get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/root.manifest ABSOLUTE)
 
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
@@ -359,7 +359,7 @@ set(ROOTFS_FILES
 # so there is nothing here for the image to depend on.  rootimg_link below is what holds it.
 
 # /usr/test IS NOT HERE ANY MORE.  The lib/test programs were on this image until the test
-# pack existed and are now on that one -- see TESTFS_FILES below, and ../../test.manifest for
+# pack existed and are now on that one -- see TESTFS_FILES below, and ../../scripts/test.manifest for
 # why they moved.  Nothing else on the root refers to them.
 
 # ...and /lib and /usr/include, the development tree task C9e put on the image so that
@@ -403,7 +403,7 @@ list(APPEND TEST_TARGETS rootimg)
 #
 # test.img holds the lib/test programs as /test/*, and a booted kernel reaches them as
 # /mnt/test/* after `/etc/mount /dev/md1 /mnt -r'.  They were /usr/test on root.img until
-# this existed; ../../test.manifest's header is the whole account, including why nothing
+# this existed; ../../scripts/test.manifest's header is the whole account, including why nothing
 # mounts it automatically.
 #
 # ONE SHARED READ-ONLY ARTIFACT.  Every .ini that wants it does `attach -r md01
@@ -418,7 +418,7 @@ list(APPEND TEST_TARGETS rootimg)
 #
 # The build-ORDER edge (testfs must be staged before b6fsutil runs) is drawn at the foot of
 # the top-level CMakeLists.txt, beside rootimg's and for the same reason.
-get_filename_component(TEST_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../test.manifest ABSOLUTE)
+get_filename_component(TEST_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/test.manifest ABSOLUTE)
 
 # The list is lib/test's, since that is where these are linked and staged; naming it from one
 # file is what keeps the manifest and this dependency list from drifting apart.  Read by a
@@ -456,7 +456,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 
 # The same check on the test pack, and it is the ONLY thing that ever inspects it: the pack is
 # mounted read-only and no guest writes it, so a `-c' failure here can only mean b6fsutil or
-# ../../test.manifest.  That is worth having anyway -- kernel/test/core mounts this image, and
+# ../../scripts/test.manifest.  That is worth having anyway -- kernel/test/core mounts this image, and
 # a filesystem sbcheck() refuses would fail that test with a message about mount(1).
 add_test(NAME testimg_check COMMAND ${B6FSUTIL} -c test.img
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -465,7 +465,7 @@ set_tests_properties(testimg_check PROPERTIES LABELS kernel)
 # THE SETUID BIT, READ BACK OFF THE FINISHED IMAGE (task C1a, and /bin/mv since C1b).
 # /bin/mkdir, /bin/mv and /bin/rmdir are the only files here whose mode the staging tree
 # cannot carry -- build/rootfs/bin/mkdir is an ordinary 0755 build artifact, and 04755 exists
-# in ../../root.manifest and nowhere else -- so nothing but the image itself can say whether
+# in ../../scripts/root.manifest and nowhere else -- so nothing but the image itself can say whether
 # ISUID survived.  `-v -v' prints one line per path: type, mode in octal, uid/gid, size,
 # inode and link count.
 #
@@ -488,7 +488,7 @@ set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
 
 # THE HARD LINKS, READ BACK OFF THE FINISHED IMAGE (tasks C2b and C27).  /bin/[ is /bin/test
 # and /bin/less is /bin/more -- each the same inode under two names -- and they are the only
-# two entries in ../../root.manifest that name no `source'.  Nothing in build/rootfs/
+# two entries in ../../scripts/root.manifest that name no `source'.  Nothing in build/rootfs/
 # corresponds to either, so both are invisible to ROOTFS_FILES above and to every size check;
 # the image is again the only thing that can say whether they are there.
 #

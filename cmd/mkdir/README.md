@@ -33,7 +33,7 @@ of the borrowed identity is left behind on the disk.
 
 **`build/rootfs/` carries no modes.** It is an ordinary staging directory and
 `build/rootfs/bin/mkdir` is an ordinary 0755 build artifact; the bit exists in exactly one
-place, the stanza in [`root.manifest`](../../root.manifest):
+place, the stanza in [`root.manifest`](../../scripts/root.manifest):
 
 ```
 file /bin/mkdir         # cmd/mkdir -- SETUID ROOT: mknod(2) and link(2) on a directory

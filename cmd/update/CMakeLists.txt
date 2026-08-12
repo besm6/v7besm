@@ -2,7 +2,7 @@
 #
 # /etc AND NOT /bin, which is v7's placement and update.8.umm's SYNOPSIS: it is not a command
 # a user types.  The page is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and
-# ../../root.manifest has carried its stanza since before the program did.
+# ../../scripts/root.manifest has carried its stanza since before the program did.
 #
 # NO test/ HERE: a program that does not terminate cannot be a b6_progtest case, and sync(2)
 # under b6sim would flush the BUILD MACHINE (../README.md SS9).  kernel/test/multi is the

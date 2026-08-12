@@ -8,7 +8,7 @@
 # passing its own argv, -h included -- so this program's main() looks for a `b' in the first
 # argument and ignores every other letter, and the path here and the string in ../diff/diff.c
 # are the same and have to stay so.  It is also the first entry this image has ever had in
-# /usr/lib, which ../../root.manifest therefore has to create.
+# /usr/lib, which ../../scripts/root.manifest therefore has to create.
 #
 # WHY IT IS PORTED AT ALL.  ../README.md offered the choice -- port it or drop -h -- and the
 # argument for porting is not completeness: diff prints `files too big, try -h' from noroom()

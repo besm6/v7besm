@@ -5,7 +5,7 @@
 # b6_obj's header dependency is the SYSTEM tree (KHDRS), so editing dc.h rebuilds nothing.
 # Touch dc.c after changing it.
 #
-# dc.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../root.manifest
+# dc.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../scripts/root.manifest
 # has carried its stanza since before the program did.  This task adds the binary.
 #
 # NOT PURE: nothing runs two calculators at once.  NOT SETUID: dc opens the file the caller

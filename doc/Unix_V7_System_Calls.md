@@ -144,7 +144,7 @@ had.
 | 50 | `int statfs(const char *path, struct statfs *buf)` | `statfs` — [sys3.c](../kernel/sys3.c) | The four counts `df(1M)` prints — `s_fsize`, `s_isize`, `s_tfree`, `s_tinode` — for the filesystem holding `path`, out of the **in-core** superblock. `namei()` crosses a mount, so `statfs("/mnt")` answers for what is mounted there. `ENXIO` if the filesystem is not mounted, `EFAULT` for a bad pointer, and `stat(2)`'s errors from the path walk. **Not privileged.** |
 
 **Why it exists.** Every other Unix finds a kernel variable with `nlist(3)` over the kernel
-image. **There is no kernel image on this root filesystem** — [root.manifest](../root.manifest)
+image. **There is no kernel image on this root filesystem** — [root.manifest](../scripts/root.manifest)
 names no `/unix`, and `kernel/unix.ini` has the *simulator* load one off the build host — so
 `nlist(3)` would have nothing to open and is deliberately absent from this libc
 ([lib/libc/README.md](../lib/libc/README.md)). RetroBSD met the same wall, its kernel living in

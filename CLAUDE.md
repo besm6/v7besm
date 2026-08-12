@@ -100,13 +100,13 @@ having no `O_CREAT` and no `O_EXCL`.
 
 `build/rootfs/` is staged only, never installed, and also carries
 `/lib/{crt0.o,libc.a,libruntime.a}`, `/usr/include` and `/usr/man` through the top-level
-`CMakeLists.txt`'s `B6_STAGE_*` lists (`/usr/man` is 205 pages). **`root.manifest`** at the tree
-top describes the image; paths resolve against `b6fsutil`'s working directory
+`CMakeLists.txt`'s `B6_STAGE_*` lists (`/usr/man` is 205 pages). **`scripts/root.manifest`**
+describes the image; paths resolve against `b6fsutil`'s working directory
 (`build/kernel/test`), and modes (seven setuid) and the four hard links (`/bin/[` → `/bin/test`,
 `/bin/less` → `/bin/more`, `egrep.1`/`fgrep.1` → `grep.1`) live there rather than in the staging
 tree.
 
-**There are two disks.** `build/testfs/` is the second staging tree and **`test.manifest`**
+**There are two disks.** `build/testfs/` is the second staging tree and **`scripts/test.manifest`**
 the second manifest: the `lib/test` programs, which were `/usr/test` on the root until the
 **test pack** existed and are now `/test/*` on `test3077.disk`. Nothing mounts it
 automatically — `/etc/rc` has no line for it, deliberately — so a dialogue that wants them
@@ -163,7 +163,7 @@ copy.
   pressure or the self-hosting `cc` run is covered, it describes one of the eighteen booting
   tests that no longer exist.
 - The libc suite runs under `b6sim` only; adding a program = a `b6_libtest()` call +
-  `lib/test/progs.cmake` + `test.manifest`. **A native test that is not a libc test wants the
+  `lib/test/progs.cmake` + `scripts/test.manifest`. **A native test that is not a libc test wants the
   cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
   `build/rootfs/test/` (`cmd/novi/test/`, `cmd/libaout/rootfs/`); it can link sources
   `b6_libtest()` cannot, that one compiling exactly one `.c`.

@@ -186,7 +186,7 @@ names or counts, `timet` converts only literal `time_t` values, `spawn` never st
 shell, `pwent` prints no line of `/etc/passwd`, and `termcapt` replaces its own `environ` rather
 than let a `$TERMCAP` in the developer's shell decide what it reads.
 
-These same programs also go on a disk — the **test pack**, [`../test.manifest`](../test.manifest)
+These same programs also go on a disk — the **test pack**, [`../scripts/test.manifest`](../scripts/test.manifest)
 → `test3077.disk`, as `/test/*`, which a booted kernel reaches as `/mnt/test/*` after
 `/etc/mount /dev/md1 /mnt -r`. They were `/usr/test` on the root image until that pack existed.
 The runner that executed them there is deleted, so the disk is now a picture of them rather than

@@ -106,7 +106,7 @@ and the alternative is mailing every user on the machine the same system file ev
   they are what lets [`test/`](test/) drive the shipped script. No colon — `:` is not a
   substitution character in [`../sh/ctype.h`](../sh/ctype.h).
 * No `#!` line, and mode 0755. `/usr/bin/lorder` is the precedent and
-  [`../../root.manifest`](../../root.manifest) has the argument: there is no shebang on this
+  [`../../scripts/root.manifest`](../../scripts/root.manifest) has the argument: there is no shebang on this
   system, and the shell reads a file back itself when `exec` returns `ENOEXEC`.
 
 ## The assertion

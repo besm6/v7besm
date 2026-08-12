@@ -20,10 +20,10 @@
 # have to name libtermcap too.
 #
 # THE HELP TEXT IS COMPILED IN, so there is no /usr/lib/more.help: no data-file stanza
-# in ../../root.manifest and nothing extra in kernel/test's ROOTFS_FILES.  Twenty-four
+# in ../../scripts/root.manifest and nothing extra in kernel/test's ROOTFS_FILES.  Twenty-four
 # lines that one command prints are not worth an inode and a staging rule.
 #
-# /bin/less IS A HARD LINK to this same inode, declared in ../../root.manifest and
+# /bin/less IS A HARD LINK to this same inode, declared in ../../scripts/root.manifest and
 # asserted by kernel/test's rootimg_link_more.  It is a second NAME and nothing else:
 # nothing in more.c reads argv[0] -- upstream's `page' alias did and was deleted with
 # tailequ() -- so `less' is not GNU less and does not pretend to be.

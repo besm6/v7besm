@@ -6,7 +6,7 @@
 # its end -- login is NOT setuid because its privilege is inherited from getty, and opening
 # that door for a shell was left to this program.
 #
-# The bit itself is one line of ../../root.manifest and nothing else (../README.md §8):
+# The bit itself is one line of ../../scripts/root.manifest and nothing else (../README.md §8):
 # nothing in build/rootfs/ carries a mode.  It is the first program on this image to be
 # setuid root for something that is not a directory operation -- mkdir, mv and rmdir are the
 # other three -- and the first whose whole subject is the transition.

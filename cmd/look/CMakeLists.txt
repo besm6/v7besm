@@ -7,7 +7,7 @@
 # THE DICTIONARY IS STAGED HERE, which is what makes the bare `look word' form mean anything
 # on the image: v7's /usr/dict/words is not in this tree (../README.md says so of spell(1)'s
 # word list), so `words' beside this file is a small sorted one written for the purpose.  It
-# is staged rather than named in ../../root.manifest from the source directory, which is
+# is staged rather than named in ../../scripts/root.manifest from the source directory, which is
 # etc/CMakeLists.txt's rule and its reason: one place the contents of the image come from, so
 # that `ls build/rootfs' shows what the image will hold.
 #

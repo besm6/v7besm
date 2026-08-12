@@ -11,7 +11,7 @@
 //     unlink("d")      and take the name out of the parent
 //
 // unlink() of a directory is gated on suser() (kernel/sys4.c), so all three need root and
-// /bin/rmdir is SET-USER-ID ROOT on the image -- `mode 04755' in ../../root.manifest.  See
+// /bin/rmdir is SET-USER-ID ROOT on the image -- `mode 04755' in ../../scripts/root.manifest.  See
 // ../mkdir/README.md for the setuid account; this file's own README covers what is peculiar
 // to rmdir.  As in mkdir, the program makes its own permission check first, `access(name/..,
 // W_OK)', which asks about the REAL uid, so root is borrowed and not granted.

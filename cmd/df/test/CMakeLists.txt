@@ -62,7 +62,7 @@ fsimg_file(nested 2)    #   128 bytes -- 1 block under a directory, reported as 
 
 # The manifest's `source' paths resolve against the WORKING_DIRECTORY below, which is why
 # fsimg.d/ is generated into the build tree and named relatively -- the same arrangement
-# ../../../root.manifest has with kernel/test's build directory.
+# ../../../scripts/root.manifest has with kernel/test's build directory.
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fsimg.img
     COMMAND $<TARGET_FILE:b6fsutil> -n -s ${FSIMG_BLOCKS} -T ${FSIMG_TIME}
             -M ${CMAKE_CURRENT_SOURCE_DIR}/fsimg.manifest fsimg.img

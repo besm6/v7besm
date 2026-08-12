@@ -28,7 +28,7 @@ something a user meets rather than something a test arranges.
 
 [../login/README.md](../login/README.md) states it from the other end: `login`'s privilege is
 **inherited** — `getty` is `init`'s child and already root — rather than borrowed, so v7 ships
-`/bin/login` 0755 and so does [../../root.manifest](../../root.manifest). v7's `login.1` claims the
+`/bin/login` 0755 and so does [../../scripts/root.manifest](../../scripts/root.manifest). v7's `login.1` claims the
 command "may be used at any time to change from one user to another"; that use needs the bit, and
 the command for it is `su`. The note in `cmd/login/CMakeLists.txt` named this task in advance.
 

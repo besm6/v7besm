@@ -9,7 +9,7 @@
 # so editing rotor.h rebuilds nothing.  Touch crypt.c and ../ed/ed.c after changing it.
 #
 # crypt.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and
-# ../../root.manifest has carried its stanza since before the program did.
+# ../../scripts/root.manifest has carried its stanza since before the program did.
 #
 # NOT PURE: nobody runs two of these at once.  NOT SETUID (../README.md §8): it reads its
 # own standard input.  NO LIBS: crypt(3) and getpass(3) are in libc.

@@ -243,7 +243,7 @@ a non-zero conflict count is no longer by itself a sign of trouble — a *third*
 
 **`man egrep` used to find nothing.** `grep.1`'s NAME line is `grep, egrep, fgrep`, as v7 wrote
 it, but §10 makes the name of the *page* decide where `man` looks. Two `link` stanzas in
-[../../root.manifest](../../root.manifest) fix it for `egrep` and for `fgrep` at zero disk cost,
+[../../scripts/root.manifest](../../scripts/root.manifest) fix it for `egrep` and for `fgrep` at zero disk cost,
 rather than two more copies of one text.
 
 ## One thing this port found and did not fix

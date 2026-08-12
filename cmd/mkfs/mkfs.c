@@ -28,7 +28,7 @@
 //   * Those two buffers are exactly the ones a raw write cannot use, needing to be
 //     MDALIGN-aligned statics, which is a thing a recursive function cannot have.
 //   * `b6fsutil -n -M manifest' on the host does the same job better, and is how every
-//     image in this tree is in fact populated -- ../../root.manifest is the proto file
+//     image in this tree is in fact populated -- ../../scripts/root.manifest is the proto file
 //     this system really uses.  There is no proto fixture anywhere in the tree.
 //
 // mkfs.1m.umm says all of that again, which is ../README.md SS10's rule.

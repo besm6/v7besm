@@ -99,7 +99,7 @@ step 50000000
 
 ; Only reached when the expect never fired.  BEWARE THE REGISTER NAMES: SIMH numbers index
 ; registers in OCTAL, so r14 is `M16' and r15 is `M17'.
-if (PC == @SPIN@) echof "FAIL: exec of /etc/init failed, and the icode fell into its spin loop. r14 (SIMH M16) is the errno: 2 ENOENT means the image carries no /etc/init (does ../../root.manifest still name build/rootfs/etc/init, and did rootfs stage it?), 8 ENOEXEC means getxfile() rejected the a.out header, 13 EACCES means the mode is not executable. ACC and r14:"; ex ACC; ex M16; exit 1
+if (PC == @SPIN@) echof "FAIL: exec of /etc/init failed, and the icode fell into its spin loop. r14 (SIMH M16) is the errno: 2 ENOENT means the image carries no /etc/init (does ../../scripts/root.manifest still name build/rootfs/etc/init, and did rootfs stage it?), 8 ENOEXEC means getxfile() rejected the a.out header, 13 EACCES means the mode is not executable. ACC and r14:"; ex ACC; ex M16; exit 1
 echof "FAIL: the boot never reached the shell's root prompt. A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; a PC in the kernel means process 1 never left it, and if the step count ran out it hung, in idle() if something slept and never woke. If init ran but the shell did not, the exec of /bin/sh failed inside single() and said nothing. Look the PC up in unix.nm. PC:"
 ex PC
 exit 1

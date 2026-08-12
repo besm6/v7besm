@@ -88,7 +88,7 @@ one operator that is the whole of what was wanted.
 
 Under `-l` the templates become bare names in the current directory rather than `/tmp/ar[012]…`,
 so `ar` is the second program here after `strip` that wants the writable `/tmp`
-[../../root.manifest](../../root.manifest) provides — and the first that can be told not to.
+[../../scripts/root.manifest](../../scripts/root.manifest) provides — and the first that can be told not to.
 
 ### Descriptors, and a correction to the TODO
 

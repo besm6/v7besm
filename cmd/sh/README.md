@@ -486,7 +486,7 @@ than being captured, which is `b6sim`'s pipe and not the shell.
 * **Only the `TIOC*` ioctls `ttioccomm()` implements do anything.** `dev/sc.c`'s `scioctl()` hands
   everything to it and answers `ENOTTY` to the rest; a Consul typewriter has no line speed and no
   modem control for the others to reach.
-* **It runs.** [`root.manifest`](../../root.manifest) carries this shell as `/bin/sh` and
+* **It runs.** [`root.manifest`](../../scripts/root.manifest) carries this shell as `/bin/sh` and
   `cmd/init` as `/etc/init`, and since task 25b the boot reaches this shell's root prompt on the
   console. `kernel/test/console` holds a conversation with it — erase, kill, a line longer than a
   clist block, `>/dev/tty`, `pwd`, `ls /bin`, `^D` — and `kernel/test/session` has it write files

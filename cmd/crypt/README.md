@@ -97,7 +97,7 @@ and a wait.** `makekey` *is* that call and nothing else, so this is not an appro
 
 `/usr/lib/makekey` is on the image all the same, as `makekey.8` describes it, and it is the
 second program here outside `/bin` after `/usr/lib/diffh`. Nothing execs it. That is worth
-saying out loud in `../../root.manifest` rather than leaving for somebody to discover.
+saying out loud in `../../scripts/root.manifest` rather than leaving for somebody to discover.
 
 Two corrections to its twenty-one lines. v7 ignored both `read(2)` results, so ten bytes short
 of ten produced thirteen bytes derived from whatever the stack held; and it passed an

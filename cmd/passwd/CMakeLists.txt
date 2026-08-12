@@ -2,7 +2,7 @@
 #
 # Task C6 (../README.md), and the only program on this image that WRITES /etc/passwd.  SETUID
 # ROOT: the file is 0644 and root's, so nothing unprivileged could put a new hash in it.
-# The bit is one line of ../../root.manifest and nothing else (../README.md §8).
+# The bit is one line of ../../scripts/root.manifest and nothing else (../README.md §8).
 #
 # It rewrites through /etc/ptmp and copies BACK over /etc/passwd with creat(), because this
 # kernel has no rename(2).  passwd.c's header is the account, including the /etc/ptmp leak

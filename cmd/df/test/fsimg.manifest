@@ -6,7 +6,7 @@
 # argument handling.  ../../ls/README.md's limitation -- b6sim cannot read a directory --
 # is what keeps du(1) out of that world; neither of these reads one.
 #
-# ../../../root.manifest is the real one and this is deliberately nothing like it: no
+# ../../../scripts/root.manifest is the real one and this is deliberately nothing like it: no
 # device nodes (b6fsutil needs no kernel to make them, but nothing here looks at one), no
 # programs, and 200 blocks rather than 2000.  What it has instead is FILE SIZES CHOSEN FOR
 # THE ARITHMETIC: every number both programs print is a ceil-divide by the 3072-byte
@@ -46,7 +46,7 @@
 # The sources are generated at configure time into fsimg.d/ by CMakeLists.txt beside this
 # file -- they are runs of one 64-byte line, so nothing binary is checked in -- and the
 # paths below resolve against b6fsutil's WORKING_DIRECTORY, which is the test's build
-# directory, exactly as ../../../root.manifest's resolve against kernel/test's.
+# directory, exactly as ../../../scripts/root.manifest's resolve against kernel/test's.
 
 default
 owner 0

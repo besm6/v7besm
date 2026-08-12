@@ -4,10 +4,10 @@
 # TWO HALVES AND ONLY ONE OF THEM IS COMPILED.  /usr/lib/calendar is the C program below,
 # which prints the egrep pattern for today and tomorrow; /usr/bin/calendar is the SHELL
 # SCRIPT that runs it and greps with it, and is the second script on this image after
-# ../lorder's.  Mode 0755 on the script and no `#!' line: ../../root.manifest says why.
+# ../lorder's.  Mode 0755 on the script and no `#!' line: ../../scripts/root.manifest says why.
 #
 # calendar.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and
-# ../../root.manifest has carried its stanza since before either half did.
+# ../../scripts/root.manifest has carried its stanza since before either half did.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/cron/.

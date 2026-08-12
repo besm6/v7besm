@@ -1,7 +1,7 @@
 # tar(1) -- archive files.  Task C7 (../README.md), and the whole of it.
 #
 # b6_prog() cross-compiles tar.c with the b6* toolchain, links it against the libc built in
-# ../../lib, stages it into build/rootfs/bin/tar for ../../root.manifest to pick up, and
+# ../../lib, stages it into build/rootfs/bin/tar for ../../scripts/root.manifest to pick up, and
 # registers the ctest `rootfs_tar_size' that holds the two address-space ceilings of
 # ../README.md SS6 -- const+text+data+bss under 28,672 words, and no relocatable symbol above
 # word 32,767.  Neither is otherwise checked and both fail silently.

@@ -37,7 +37,7 @@
 //
 //   THE /usr/adm/msgbuf HISTORY.  v7 kept a copy of the ring in that file and printed only
 //   what had appeared since the last run, walking the two rings in lockstep and printing
-//   `...' where they diverged.  The file is not on this image (../../root.manifest), the
+//   `...' where they diverged.  The file is not on this image (../../scripts/root.manifest), the
 //   directory is not either, and the machinery is three quarters of the program.  Its `-'
 //   flag went with it.
 //

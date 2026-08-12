@@ -12,7 +12,7 @@
 #
 # NOT PURE: nobody runs two mail readers at once.
 #
-# mail.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../root.manifest
+# mail.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../scripts/root.manifest
 # has carried its stanza since long before the program did.  This task adds the binary and
 # the /usr/spool/mail directory it delivers into.
 

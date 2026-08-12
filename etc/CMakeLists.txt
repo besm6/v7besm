@@ -1,7 +1,7 @@
 # /etc -- the static half of the root filesystem.
 #
 # Nothing here is compiled.  motd, passwd, rc and termcap are plain text that has to be ON
-# the disk image, and the image is built out of ${B6_ROOTFS} (root.manifest, at the top of the tree), so they are
+# the disk image, and the image is built out of ${B6_ROOTFS} (scripts/root.manifest), so they are
 # STAGED there exactly as b6_prog() stages a program rather than being named in the manifest
 # from the source tree.  One rule for where the contents of the image come from, and
 # `ls build/rootfs' then shows what the image will hold.

@@ -4,7 +4,7 @@
 # by whoever ran at, and that ownership is how ../atrun recovers the uid to run the job
 # under.  A bit here would make every job root's.
 #
-# at.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../root.manifest
+# at.1.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../scripts/root.manifest
 # has carried its stanza since before the program did.  It documents ../atrun as well.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is

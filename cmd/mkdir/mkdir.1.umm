@@ -24,7 +24,7 @@ itself, and `..` for its parent, are made automatically.
 
 **Note:** *mkdir* is **set-user-id to root** on this system, and must be: there is no *mkdir*
 system call, so the directory is built by hand out of mknod(2) and two link(2)s, and all three
-are refused to anyone but the super-user. The bit is granted in *root.manifest* at the top of
+are refused to anyone but the super-user. The bit is granted in *scripts/root.manifest* in
 the source tree, as mode 04755.
 
 The permission the paragraph above speaks of is therefore the program's own: *mkdir* calls

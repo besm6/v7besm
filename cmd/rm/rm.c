@@ -9,7 +9,7 @@
 //
 // THAT LAST STEP IS WHY rm ITSELF NEEDS NO PRIVILEGE.  unlink() of a directory is gated on
 // suser() (kernel/sys4.c), and rm never calls it: removedir() below forks and execs
-// /bin/rmdir, which IS set-user-id root on the image (`mode 04755' in ../../root.manifest).
+// /bin/rmdir, which IS set-user-id root on the image (`mode 04755' in ../../scripts/root.manifest).
 // So `rm -r' works for an ordinary user without rm being setuid, which is v7's arrangement and
 // is kept.  ../mkdir/README.md is the setuid account.
 //

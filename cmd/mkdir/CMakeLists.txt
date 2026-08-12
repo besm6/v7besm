@@ -9,7 +9,7 @@
 #
 # THE SETUID BIT IS NOT SET HERE.  Nothing in the build tree carries a mode: build/rootfs/ is
 # an ordinary staging directory, and every permission the image has comes from
-# ../../root.manifest, where this program's stanza says `mode 04755'.  See README.md.
+# ../../scripts/root.manifest, where this program's stanza says `mode 04755'.  See README.md.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

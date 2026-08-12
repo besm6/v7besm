@@ -36,7 +36,7 @@ machinery, and there is **no second copy of any source**.
 
 **This is the one of the four that writes**, so it is also the one that wanted the target's
 filesystem rather than only its address space: a writable `/tmp`, which
-[../../root.manifest](../../root.manifest) has.
+[../../scripts/root.manifest](../../scripts/root.manifest) has.
 
 | | host | BESM-6 | why |
 | --- | ---: | ---: | --- |

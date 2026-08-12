@@ -11,7 +11,7 @@
 # ../diffh is the other half and is NOT optional: `files too big, try -h' is what diff says
 # when its vectors do not fit, and on a 28,672-word address space (../README.md §6) that is
 # nearer than it was on a PDP-11.  diff -h execv's /usr/lib/diffh, so the path in
-# ../../root.manifest and the one in diff.c are the same string and have to stay so.
+# ../../scripts/root.manifest and the one in diff.c are the same string and have to stay so.
 #
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over diff.c, links it
 # `crt0.o diff.o -lc -lruntime' against the libc built in ../../lib, and stages the result as

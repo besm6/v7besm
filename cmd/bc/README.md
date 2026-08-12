@@ -209,7 +209,7 @@ count does not move. It has not.
 
 **On the disk** `bc` costs **20 blocks** and `lib.b` **1**, and the image went from 291 free to
 **270**. The manual page was already staged — `B6_STAGE_MAN` globs `cmd/*/*.umm` and
-`../../root.manifest` has carried `/usr/man/man1/bc.1` since long before there was a program.
+`../../scripts/root.manifest` has carried `/usr/man/man1/bc.1` since long before there was a program.
 
 ## What this harness cannot say
 

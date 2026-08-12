@@ -14,7 +14,7 @@
 # under b6sim would be the build machine's.  kernel/test/multi is the assertion, as it is for
 # ../update and ../atrun.
 #
-# cron.8.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../root.manifest
+# cron.8.umm is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and ../../scripts/root.manifest
 # has carried its stanza since before the program did.  This task adds the binary and the table.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is

@@ -82,7 +82,7 @@
 // call sites.
 //
 // TEMP FILES GO TO /tmp, and there is no second try.  v7 tried /usr/tmp and fell back to
-// /tmp; this image has /tmp and no /usr/tmp (../../root.manifest), so the first try was a
+// /tmp; this image has /tmp and no /usr/tmp (../../scripts/root.manifest), so the first try was a
 // wasted creat() on every run.  With one entry left, -T becomes authoritative: v7 silently
 // used /tmp when the directory the user named was unusable, which is not a service.
 //

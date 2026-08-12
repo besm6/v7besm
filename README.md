@@ -115,8 +115,7 @@ include/       the system headers
 lib/           libc, libm, libtermcap, libcurses
 cmd/           the toolchain, and the 112 programs that go on the disk image
 etc/           the static files of the image: passwd, group, motd, rc, ttys, termcap
-root.manifest  how all of that is assembled into the root filesystem
-test.manifest  a second pack, /test/*, that the library tests run from
+scripts/       the CMake cross-build rules, and the two manifests that assemble the disks
 doc/           BESM-6 architecture and toolchain references
 ```
 

@@ -77,7 +77,7 @@
 //
 // NOT SETUID, and it must not become so: /dev/rmd0 is mode 0600 because that one node is
 // every file's contents, and -s rewrites the free list of the whole volume.  ../README.md
-// SS8 is the rule; ../fsck's and ../mkfs's stanzas in ../../root.manifest are the precedent.
+// SS8 is the rule; ../fsck's and ../mkfs's stanzas in ../../scripts/root.manifest are the precedent.
 //
 
 // The order here does not matter and cannot be made to: clang-format sorts a block of <>

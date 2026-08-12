@@ -14,7 +14,7 @@
 // reason: there is no rename(2) and no mkdir(2), so renaming a directory is done by hand out
 // of link() and unlink(), and BOTH REFUSE A DIRECTORY TO ANYONE BUT THE SUPER-USER --
 // `if ((ip->i_mode & IFMT) == IFDIR && !suser())' in link() (kernel/sys2.c) and in unlink()
-// (kernel/sys4.c).  So /bin/mv is `mode 04755' in ../../root.manifest, and README.md is the
+// (kernel/sys4.c).  So /bin/mv is `mode 04755' in ../../scripts/root.manifest, and README.md is the
 // account; ../mkdir/README.md is the general one and is not repeated here.
 //
 // WHICH MAKES THE PLACE OF setuid(getuid()) LOAD-BEARING, and it is v7's own placement, kept
