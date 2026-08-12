@@ -460,6 +460,33 @@ counters — the low bits of the subscript are the set of busy devices and the h
 state, so a reader that samples only the four CPU states silently drops every tick taken while a
 disk was busy.
 
+### Telling it the date
+
+The tick is one thing and the **epoch** another, and only the first is the machine's. There is
+no clock-calendar a program can read, so `iinit()` seeds `time` from the root superblock's
+`s_time` — which `b6fsutil -T` stamped when the image was built — and from that instant the
+count is correct while the *date* is whatever the build was. `update()` writes the running
+value back into `s_time` on a writable root, so it also drifts forward across reboots.
+
+Nothing about that is broken, and it was mistaken for a missing feature for some time: elapsed
+time works, and `stime(2)` has always been there behind `date yymmddhhmm` for the super-user.
+What was missing was the operator. v7's answer on a machine without a battery clock is that
+somebody types the date in single-user mode, and [date.ini](date.ini) is that somebody — a SIMH
+`expect` action run by [unix.ini](unix.ini) at the `make demo` prompt and by
+[test/multi.ini](test/multi.ini) at the same point in its dialogue.
+
+Two things about it are worth keeping. SCP substitutes `%VAR%` when it **reads** a line, so a
+`send` written into the rule would carry the time the `.ini` was parsed rather than the time
+the prompt appeared; calling a nested `DO` file from the action defers it, and `%%VAR%%` is not
+a shortcut for the same thing — an expect action is not substituted twice. And every SCP date
+variable comes from `localtime()`, while this machine is always GMT (`TIMEZONE` and `DSTFLAG`
+are both 0), so the guest's clock reads the wall clock of the room the simulator is in,
+labelled GMT. That is what a human at the console would have typed.
+
+`multi`'s stage 1b matches the year back out of `date`'s own reply, which is the only assertion
+anywhere that `stime(2)` moves the clock on the real kernel — `kernel/test/utils` used to hold
+it and was deleted with the other fifteen.
+
 The interrupt priority model has exactly **two levels**, not v7's eight. БлПр is the priority;
 ГРП's mask register is the per-source enable, and the two do different jobs. An spl cookie is
 therefore a whole mode word, not a small integer: never compare one against a level, never

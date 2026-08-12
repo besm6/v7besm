@@ -35,6 +35,11 @@
 #                writer this port has had; a lost block or a bad link count would otherwise only
 #                show up later, in some other test, for no visible reason.
 #
+#   the modes,   ...and note that the OWNERS are asserted here and no longer on the console as
+#   again        well: multi.ini's ls -l stage stopped matching the timestamp when the clock
+#                became real, cmd/ls printing a year rather than a time once the image's own
+#                -T mtime is six months old.  This is the half that was always load-bearing.
+#
 #   the tty1     what Consul 2 printed, diffed against multi.expected.  The three lines the
 #   transcript   simulator itself writes to a new connection are dropped: two are constant and the
 #                third carries a wall clock and a port number.  CRs go too -- the line is in

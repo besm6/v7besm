@@ -87,6 +87,17 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/unix
 
 add_custom_target(kernel ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/unix)
 
+# date.ini -- the operator typing the date, run as an expect action by unix.ini here and by
+# test/multi.ini as `../date.ini'.  Staged rather than read in place: SIMH's `do' resolves a
+# relative name against the working directory, and for both callers that is a build
+# directory.  README.md, "Telling it the date".
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/date.ini
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/date.ini ${CMAKE_CURRENT_BINARY_DIR}/date.ini
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/date.ini
+    COMMENT "stage date.ini" VERBATIM)
+add_custom_target(dateini ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/date.ini)
+
 # `make demo' boots the freshly-linked image under SIMH.  Named so rather than `run',
 # which at the top level means the unit tests.  Prints the memory sizes and the root
 # size, then runs on in user mode -- see unix.ini.
@@ -100,8 +111,9 @@ endif()
 enable_testing()
 add_subdirectory(test)
 
-# unix.ini attaches test/root3072.disk, so `make demo' needs the root image built as well as
-# the kernel.  The target comes from test/, hence the dependency here rather than above.
+# unix.ini attaches test/root3072.disk and runs test/date.ini, so `make demo' needs the root
+# image and that script built as well as the kernel.  Both targets come from test/, hence the
+# dependency here rather than above.
 if(BESM6)
-    add_dependencies(demo rootimg)
+    add_dependencies(demo rootimg dateini)
 endif()

@@ -8,7 +8,7 @@ at - execute commands at a later time
 
 ## SYNOPSIS
 
-| **at** time [ day ] [ file ]
+| **at** *time* [ *day* ] [ *file* ]
 
 ## DESCRIPTION
 
@@ -31,12 +31,24 @@ and days may be recognizably truncated. Examples of legitimate commands are
 *At* programs are executed by periodic execution of the command */usr/lib/atrun* from cron(8).
 The granularity of *at* depends upon how often *atrun* is executed.
 
+Note: there is no cron(8) on this system yet, so nothing runs */usr/lib/atrun* by itself. Until
+there is, the super-user runs it by hand and that is when jobs are collected. *Atrun* must be
+run by root: it uses setuid(2) to become the owner of each job, which is a privileged call.
+
+Note: this machine has no clock-calendar, so the time of day is whatever the last date(1)
+command set — the operator sets it once, in single-user mode, after which it advances
+correctly. A job scheduled before the clock has been set is scheduled against the date the
+disk image was stamped with.
+
 Standard output or error output is lost unless redirected.
 
 ## FILES
 
-| /usr/spool/at/yy.ddd.hhhh.uu
-| activity to be performed at hour *hhhh* of year day *ddd* of year *yy*. *uu* is a unique number.
+| /usr/spool/at/yyyy.ddd.hhhh.uu
+| activity to be performed at hour *hhhh* of year day *ddd* of year *yyyy*. *uu* is a unique
+number. Note: v7 wrote the year as two digits, which stopped working in 2000 — the field it
+formatted counts years from 1900, so it is three digits now and *atrun* could not read it back.
+All four digits are written here.
 | /usr/spool/at/lasttimedone contains *hhhh* for last hour of activity.
 | /usr/spool/at/past directory of activities now in progress
 | /usr/lib/atrun program that executes activities that are due
@@ -54,3 +66,12 @@ Complains about various syntax errors and times out of range.
 
 Due to the granularity of the execution of */usr/lib/atrun,* there may be bugs in scheduling
 things almost exactly 24 hours into the future.
+
+*/usr/spool/at* has to be writable by everybody, since *at* is not set-user-ID and the copy
+must belong to whoever made it. Note: v7 drew no conclusion from that, but a hard link to a
+file belonging to somebody else carries its owner along, so *atrun* would have run it under
+that identity. This *atrun* refuses any job with more than one link — a job *at* created has
+exactly one.
+
+*/usr/spool/at/lasttimedone* is written on every run of *atrun* and, note, is read by no
+program.

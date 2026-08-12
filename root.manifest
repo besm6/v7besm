@@ -175,6 +175,23 @@ dir /mnt
 # pw_dir field of /etc/passwd and prints `No directory' if it cannot, so the account is only
 # usable because this exists -- and being uid 7's is what lets a non-root shell write in it.
 # That last property is what put the cc demo below here rather than anywhere else.
+# THE FIRST SPOOL DIRECTORY THIS IMAGE HAS EVER HAD, task C21, and at(1)'s whole storage.
+# 0777 for the same reason /tmp is: at is NOT setuid, so an ordinary user creates the copy of
+# their own script here, owns it, and that ownership is how /usr/lib/atrun later recovers the
+# uid to run the job under.  `past' is 0777 too and not 0755 -- atrun's child unlinks the job
+# AFTER dropping to its owner, and unlink asks for write permission on the directory.
+#
+# NOTHING CREATES THESE AT RUN TIME.  at does not mkdir its spool and atrun does not either;
+# both simply fail without them, which is what makes them manifest entries rather than a
+# boot-time step.  /usr/spool/mail is deliberately still absent: cmd/login probes for it with
+# access() and must go on not finding it (cmd/login/README.md), and mail is refused in
+# cmd/TODO.md.
+dir /usr/spool
+dir /usr/spool/at
+mode 0777
+dir /usr/spool/at/past
+mode 0777
+
 dir /usr/guest
 owner 7
 group 3
@@ -326,6 +343,17 @@ source ../../rootfs/bin/sh
 mode 0755
 
 # ---- enough commands to prove the prompt -----------------------------------------
+
+file /bin/at            # cmd/at -- task C21, and the first program here whose whole subject
+                        # is LATER.  It copies a script into /usr/spool/at above under the
+                        # name yyyy.ddd.hhhh.uu, and /usr/lib/atrun below runs it when that
+                        # time has passed.  THE YEAR IS FOUR DIGITS AND v7's WAS TWO: v7
+                        # wrote %02d of tm_year, which is 126 in 2026 and three characters,
+                        # and atrun read %2d back -- so every job would have been skipped in
+                        # silence.  NOT SETUID, deliberately: see the spool stanza above.
+                        # cmd/at/README.md.
+source ../../rootfs/bin/at
+mode 0755
 
 file /bin/awk           # cmd/awk -- task C17, the pattern-scanning language, and the only
                         # program here built from a yacc grammar AND a lex scanner.  THE
@@ -2430,6 +2458,16 @@ file /usr/man/man8/update.8
 source ../../rootfs/usr/man/man8/update.8
 mode 0644
 
+
+file /usr/lib/atrun     # cmd/atrun -- task C21, at(1)'s other half, and documented inside
+                        # at.1 rather than in a page of its own.  /usr/lib because it is not
+                        # a command a user types: v7 ran it from cron every five minutes, and
+                        # THERE IS NO cron ON THIS IMAGE YET (task C22), so until there is it
+                        # is run by hand.  NOT SETUID: it needs suser() for the setuid(2) that
+                        # drops to the job's owner, so root runs it -- and a bit here would
+                        # hand that same code path to anybody.  cmd/at/README.md.
+source ../../rootfs/usr/lib/atrun
+mode 0755
 
 file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
                         # /usr/lib stanza above.  Its window is RANGE (30) lines of each

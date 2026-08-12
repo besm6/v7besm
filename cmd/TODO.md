@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C20 and C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C21 and C26
 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -45,13 +45,50 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C21 | `at`, `atrun` | | medium, blocked on a clock |
-| C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium, blocked on a clock |
-| C23 | `calendar` | | small, blocked on a clock and on its data |
+| C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium |
+| C23 | `calendar` | | small, blocked on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C21**, and it starts by answering the clock — C21, C22 and C23 are three tasks
-behind one kernel question, and nothing below is unblocked until somebody answers it.
+**Where to start: C22.** It is unblocked, and what unblocked it is C21 rather than any kernel
+work — see below.
+
+C21 put `/bin/at` and `/usr/lib/atrun` on the image, 28 blocks between them, and what it
+retired was **a blocker that was never there**. Three tasks stood behind "a clock this machine
+has not got", and two-thirds of that sentence was wrong
+([at/README.md](at/README.md)):
+
+* **Elapsed time always worked.** The interval timer is what is *supposed* to advance the
+  clock: it free-runs at `HZ` 250, SIMH calibrates it against the host's wall clock, and
+  `kernel/clock.c` has incremented `time` every 250th tick since the port existed, with
+  `kernel/test/uclock` asserting it. Only the **epoch** was a build constant.
+* **The epoch was always settable**, by `date yymmddhhmm` → `stime(2)` → `suser()`. What was
+  missing was not a mechanism but an **operator** — and v7's answer on a machine with no
+  battery clock is that somebody types the date in single-user mode. So the answer was a
+  fifteen-line SIMH script, [../kernel/date.ini](../kernel/date.ini), and not the kernel task
+  nobody had written. **C22 and C23 are unblocked by that finding and not by their own work.**
+
+The rule to carry is the shape of the mistake rather than the clock: **a blocker that names a
+mechanism should be checked against the mechanism before it is inherited.** This one had been
+copied into `cmd/TODO.md`, `etc/rc` and `kernel/test/CMakeLists.txt`, and three tasks waited on
+it.
+
+The port itself turned on one line. v7 names each spool file with `%02d` of `tm_year`, which is
+**126** in 2026 and three characters, and `atrun` reads it back with `%2d` — so it takes `12`,
+demands a `.`, finds `6`, and `continue`s. **Every job would have been skipped in silence**, no
+diagnostic and nothing to look at but a file that never went away. Both formats carry the full
+year now, `date(1)`'s own widened-year fix being the precedent, and `kernel/test/multi` matches
+the four digits back out of the spool. That stage was checked by narrowing `atrun`'s `sscanf`
+again and watching `multi` fail.
+
+Two more things it settled, both about a directory nobody had needed before:
+
+* **A 0777 spool plus "run this as its owner" is a hole**, not a wart. `link(2)` needs no
+  permission on the source and carries the owner along, so any user could hard-link a
+  root-owned file into `/usr/spool/at` and have `atrun` `setuid(0)` and hand it to `/bin/sh`.
+  A job `at` created has exactly one link, so anything with more is refused.
+* **A new port uses `opendir(3)`**, §5's instruction, and `atrun` is the first taker.
+  `%.14s` — v7's `DIRSIZ` written into a `sprintf` — went with the `/bin/mv` fork it was
+  formatting for; the move to `past/` is `link()` plus `unlink()`.
 
 C20 put `/etc/update` on the image, one block and 152 words, and with it **the first daemon this
 port has had** — the first program that outlives the shell that started it. What it settled was
@@ -148,7 +185,7 @@ request and a hang-up-on-last-close request are both silently ignored. Both are 
 before somebody reports them as bugs.
 
 **[../etc/rc](../etc/rc) still wants three lines**, and only one of them waits on a program:
-`cron`, which is C22 and is blocked with C21 on the clock. A boot-time `fsck` and the
+`cron`, which is C22 and waits on nothing else since C21. A boot-time `fsck` and the
 `rm -f /tmp/*` line wait on nothing but an assertion, and **that excuse expired with C20** —
 `kernel/test/multi` runs the script and asserts two of its lines already, so a third and a fourth
 are a stage each in `multi.ini`. Whoever writes them should read what C20 learned about an expect
@@ -156,22 +193,29 @@ string an echo can satisfy, and note that a `fsck` which repairs the mounted roo
 
 ---
 
-## C21. `at` and `atrun`
-
-`at/at.c` 307 and `atrun/atrun.c` 110 (documented inside `at.1`). **Blocked on a clock this machine
-has not got**: `iinit()` seeds `time` from the root superblock's `s_time`, so every boot starts at
-whatever `b6fsutil -T` stamped and nothing advances it but the interval timer. A program whose
-whole subject is "later" is not worth putting on the image until that is answered, and the answer
-is a kernel task nobody has written.
-
 ## C22. `cron`
 
-`cron/cron.c` 254, plus the `cron/crontab` data file as `/usr/lib/crontab`. **The same blocker as
-C21**, and the other [../etc/rc](../etc/rc) line — with the same §7 step 4 problem `update` has.
+`cron/cron.c` 254, plus the `cron/crontab` data file as `/usr/lib/crontab`. The other
+[../etc/rc](../etc/rc) line, with the same §7 step 4 problem `update` had and the same answer:
+`kernel/test/multi` is where the line is asserted. **No longer blocked on a clock** — C21
+answered that for all three of these tasks.
+
+**Two things to settle before writing any of it**, and the first is v7's own contradiction:
+
+* **`cron` does `setuid(1)` in `main`, and `atrun` needs `suser()`.** So a `cron`-forked
+  `/usr/lib/atrun` runs as uid 1 and its `setuid(stbuf.st_uid)` — the call that gives a job its
+  submitter's identity — fails. As the two stand they do not compose, and the crontab line
+  `0,5,10,...  *  *  *  *  /usr/lib/atrun` is exactly the composition. Deciding whether `cron`
+  keeps its `setuid(1)` here is C22's first question, not an implementation detail; a setuid
+  bit on `atrun` is **not** the answer ([at/README.md](at/README.md) says why).
+* **Two of `crontab`'s three lines want things this image has not got**: `/etc/dmesg -
+  >>/usr/adm/messages` needs a `/usr/adm` that [../root.manifest](../root.manifest) does not
+  have and that the accounting row below refuses on purpose, and `/usr/bin/calendar -` is C23.
+  Only the `atrun` line can run today.
 
 ## C23. `calendar`
 
-`calendar/calendar.c`, 54 lines. **Blocked twice**: on C21's clock, and on its data — what the
+`calendar/calendar.c`, 54 lines. **Blocked on its data**, and on that alone since C21: what the
 reference tree holds under `calendar`'s name is an x86 binary, not the database, so the file the
 program reads would have to be written from scratch.
 

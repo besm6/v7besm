@@ -192,6 +192,13 @@ endif()
 # prints GMT and only GMT (TIMEZONE and DSTFLAG are both 0), so `date' on the image says
 # `Sat Jul 25 08:23:0X GMT 2026'; the seconds field is the only one the boot drift can move,
 # and 08:23:00 is 37 seconds clear of a minute roll.
+#
+# IT IS ONLY THE SEED SINCE TASK C21.  `multi' replaces it at the single-user prompt with the
+# host's wall clock (../date.ini), the way an operator would, so every date that test prints is
+# real and no expect in it names a year of its own.  `boot' and `core' never get that far and
+# still run on the stamp.  The file MTIMES are the stamp either way, which is why multi stopped
+# matching one in an `ls -l' listing: cmd/ls prints the year instead of the time once a file is
+# six months old, and against a real clock the stamp eventually is.
 set(ROOTTIME 1784967780)
 
 #
@@ -235,6 +242,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/ttys
     ${B6_ROOTFS}/usr/dict/words
     ${B6_ROOTFS}/bin/sh
+    ${B6_ROOTFS}/bin/at
+    ${B6_ROOTFS}/usr/lib/atrun
     ${B6_ROOTFS}/bin/awk
     ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/bc
@@ -628,11 +637,18 @@ if(BESM6)
 endif()
 
 # Aggregate target the wrapper builds before running ctest (ctest itself never builds).
+# dateini is the parent directory's: multi.ini runs it as ../date.ini.
 add_custom_target(tests DEPENDS ${TEST_TARGETS})
+if(BESM6)
+    add_dependencies(tests dateini)
+endif()
 
 # When built inside the top-level project, hook the images into its build_tests aggregate,
 # so the top-level `make test' (which builds build_tests) and `make run' (ctest) cover the
 # kernel SIMH tests too.
 if(TARGET build_tests)
     add_dependencies(build_tests ${TEST_TARGETS})
+    if(BESM6)
+        add_dependencies(build_tests dateini)
+    endif()
 endif()
