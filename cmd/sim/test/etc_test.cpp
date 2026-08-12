@@ -174,7 +174,7 @@ TEST(EtcFiles, EveryStagedFileIsServed)
 TEST(EtcFiles, LookupIsExact)
 {
     ASSERT_NE(EtcFiles::find("/etc/passwd"), nullptr);
-    EXPECT_EQ(EtcFiles::find("/etc/passwd")->size, 145u);
+    EXPECT_EQ(EtcFiles::find("/etc/passwd")->size, 146u);
 
     EXPECT_EQ(EtcFiles::find("etc/passwd"), nullptr);
     EXPECT_EQ(EtcFiles::find("/etc/passwd/"), nullptr);

@@ -20,11 +20,14 @@
 # signal and an alarm -- and task C2b /bin/{basename,test,time,tty,yes}, none of them setuid
 # either, together with THE FIRST HARD LINK this file has ever carried: /bin/[ is /bin/test.
 # Kernel task 29b added the three entries that make this a MULTI-USER image: /etc/getty,
-# /bin/login and the /etc/ttys that sends init looking for them -- plus /usr/guest, the first
-# directory here that is not root's.  Task C25b added /usr/man -- two hundred manual pages in five
-# section directories, the largest single addition this file has ever taken, and the whole of
-# the manual in the dialect doc/Manual_Page_Format.md describes -- together with the
-# /usr/bin/man that finds them, and task C25a the /usr/bin/manview that formats one.
+# /bin/login and the /etc/ttys that sends init looking for them -- plus a home for guest, the
+# first directory here that is not root's.  That home began as /usr/guest and is /home/guest
+# now: /usr is a directory of the root on this image rather than the separate volume v7 hung
+# accounts off, so people live under a /home of their own.  Task C25b added /usr/man -- two
+# hundred manual pages in five section directories, the largest single addition this file has
+# ever taken, and the whole of the manual in the dialect doc/Manual_Page_Format.md describes --
+# together with the /usr/bin/man that finds them, and task C25a the /usr/bin/manview that
+# formats one.
 #
 # WHY THIS FILE LIVES IN scripts/ and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
@@ -177,10 +180,45 @@ dir /lost+found
 # than once (i_count != 1, kernel/sys3.c) with EBUSY.
 dir /mnt
 
-# guest's home, and the first directory here that is not root's.  login(1) chdir()s to the
-# pw_dir field of /etc/passwd and prints `No directory' if it cannot, so the account is only
-# usable because this exists -- and being uid 7's is what lets a non-root shell write in it.
-# That last property is what put the cc demo below here rather than anywhere else.
+# WHERE PEOPLE LIVE.  login(1) chdir()s to the pw_dir field of /etc/passwd and prints
+# `No directory' if it cannot, so an account is only usable because its home exists -- and
+# guest's being uid 7's is what lets a non-root shell write in it.  That last property is what
+# put the cc demo below here rather than anywhere else.
+#
+# A TOP-LEVEL /home AND NOT ANOTHER /usr SUBDIRECTORY, which is where guest lived until now.
+# v7 put accounts under /usr because /usr WAS A SEPARATE VOLUME holding the system's second half
+# and everybody's account together; here it is a directory of the root like any other, so
+# nothing is gained by the crowding and /usr keeps only the system's half.  /home is root's and
+# 0755 -- a place to put homes, not a place anyone works -- and each home inside it is its
+# owner's.  guest is the only tenant, root's home being `/' and sys, bin and uucp being
+# pseudo-accounts whose pw_dir is a working directory rather than a home.
+dir /home
+dir /home/guest
+owner 7
+group 3
+
+file /home/guest/hello.S # cmd/cc/hello.S -- THE DEMO, and the only SOURCE FILE on this disk.
+                        # Task C9e put /usr/bin/cc here; this is the thing to point it at:
+                        #
+                        #       $ cc hello.S
+                        #       $ ./a.out
+                        #       Hello BESM-6!
+                        #
+                        # A capital `.S' on purpose -- it is what sends the file through cpp
+                        # before as, and the #include <sys/syscall.h> at its head is what
+                        # that is for -- so this one command is the longest chain the
+                        # machine can run, and the only one it can run end to end: a `.c'
+                        # cannot be compiled here at all.  It calls write(2) and exit(2)
+                        # through the $77 gate directly and takes nothing from libc, which
+                        # is why it is legible as a first program.  It is guest's own file
+                        # (uid 7, as the home is) because cc writes hello.o and a.out
+                        # into the CURRENT directory: a logged-in user builds it where it
+                        # sits.  cmd/cc/README.md, "The demo on the image".
+source ../../rootfs/home/guest/hello.S
+mode 0644
+owner 7
+group 3
+
 # THE FIRST SPOOL DIRECTORY THIS IMAGE HAS EVER HAD, task C21, and at(1)'s whole storage.
 # 0777 for the same reason /tmp is: at is NOT setuid, so an ordinary user creates the copy of
 # their own script here, owns it, and that ownership is how /usr/lib/atrun later recovers the
@@ -208,32 +246,6 @@ mode 0777
 dir /usr/spool/at/past
 mode 0777
 dir /usr/spool/mail
-
-dir /usr/guest
-owner 7
-group 3
-
-file /usr/guest/hello.S # cmd/cc/hello.S -- THE DEMO, and the only SOURCE FILE on this disk.
-                        # Task C9e put /usr/bin/cc here; this is the thing to point it at:
-                        #
-                        #       $ cc hello.S
-                        #       $ ./a.out
-                        #       Hello BESM-6!
-                        #
-                        # A capital `.S' on purpose -- it is what sends the file through cpp
-                        # before as, and the #include <sys/syscall.h> at its head is what
-                        # that is for -- so this one command is the longest chain the
-                        # machine can run, and the only one it can run end to end: a `.c'
-                        # cannot be compiled here at all.  It calls write(2) and exit(2)
-                        # through the $77 gate directly and takes nothing from libc, which
-                        # is why it is legible as a first program.  It is guest's own file
-                        # (uid 7, as the directory is) because cc writes hello.o and a.out
-                        # into the CURRENT directory: a logged-in user builds it where it
-                        # sits.  cmd/cc/README.md, "The demo on the image".
-source ../../rootfs/usr/guest/hello.S
-mode 0644
-owner 7
-group 3
 
 # ---- the program the icode execs, and the shell it will exec in turn -------------
 

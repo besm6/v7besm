@@ -61,7 +61,7 @@ cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a
 stack**, where a long function costs 1.5–2 words per source line before any array.
 `cmd/README.md` §6 is the account.
 
-**The root image has 92 free blocks of 2000**, and the test pack 1,686 of its own. **Take the
+**The root image has 91 free blocks of 2000**, and the test pack 1,686 of its own. **Take the
 number from a build** — `b6fsutil` prints it on every `root.img` — rather than from this
 sentence, which has drifted before. Budget more than the program: a directory it needs is a
 block, a program past 6 blocks pays an indirect block too, a data file can dwarf the program

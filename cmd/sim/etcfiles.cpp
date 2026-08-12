@@ -84,7 +84,7 @@ daemon:x:1:1::/:
 sys::2:2::/usr/sys:
 bin::3:3::/bin:
 uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
-guest::7:3::/usr/guest:
+guest::7:3::/home/guest:
 )ETC";
 
 // etc/rc -- the boot script -- and the file a build host is most likely to have too.

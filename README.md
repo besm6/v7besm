@@ -66,7 +66,7 @@ cd kernel && make demo  # boot it, and type at the shell yourself
 ```
 
 You get a single-user root shell first, at a `#` prompt. Type `^D` and the system comes up
-multi-user with a `login:` on the console — log in as `guest`, no password. `/usr/guest/hello.S`
+multi-user with a `login:` on the console — log in as `guest`, no password. `/home/guest/hello.S`
 is the program above, ready to build.
 
 ## What works

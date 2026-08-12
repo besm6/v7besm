@@ -147,7 +147,7 @@ int main(void)
     ok("uid 7 is guest", pw != 0 && strcmp(pw->pw_name, "guest") == 0);
     if (pw != 0) {
         ok("guest is gid 3", pw->pw_gid == 3);
-        ok("guest's home is /usr/guest", strcmp(pw->pw_dir, "/usr/guest") == 0);
+        ok("guest's home is /home/guest", strcmp(pw->pw_dir, "/home/guest") == 0);
         ok("guest has no password", pw->pw_passwd[0] == '\0');
     }
 

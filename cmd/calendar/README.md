@@ -117,7 +117,7 @@ Two harnesses, because neither can do the other's half.
 It is date-independent without knowing the date: the fixture is one line written with the same
 `%DATE_MM%` and `%DATE_DD%` that stage 1 typed at the clock, and **the month is zero-padded**,
 so the line would be missed for eleven months of the year without the deviation above. Both
-forms are there — the plain one prints the reminder, and the `-` one writes `/usr/guest/calendar`
+forms are there — the plain one prints the reminder, and the `-` one writes `/home/guest/calendar`
 and then finds the letter in `/usr/spool/mail/guest`. The marker is broken by a quote —
 `CAL'OK'` typed, `CALOK` matched — because the console echoes what is typed; stage 13's
 `AT${z}RAN` is the same trick.
@@ -145,7 +145,8 @@ come back: one per day the generator covers, four on a Friday and three on a Sat
   the guest clock is calibrated to the host's, and a stage that waited would turn a
   five-second dialogue into an all-night one.
 * **That a user other than `guest` is ever reached.** `guest` is the only one of the six lines
-  of `/etc/passwd` with a home directory this image has and a `calendar` in it.
+  of `/etc/passwd` with a home directory this image has and a `calendar` in it — `/home/guest`,
+  the sole tenant of `/home`.
 * **That the temporary file is cleaned up on a signal.** The `trap` covers 0, 1, 2, 13 and 15,
   and nothing sends any of them.
 
@@ -156,7 +157,7 @@ confirmed before `multi` was touched at all — one shell, no daemons, no second
 that neither the crash nor the fix could be blamed on load:
 
 ```
-# echo '08/12 MAI'OK >/usr/guest/calendar
+# echo '08/12 MAI'OK >/home/guest/calendar
 # /usr/bin/calendar -
 # grep MAI'OK' /usr/spool/mail/guest
 08/12 MAIOK

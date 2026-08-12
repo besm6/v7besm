@@ -215,7 +215,7 @@ own with its own tools, against its own C library, and runs the result.
 
 ### The demo on the image
 
-The image ships one source file, [hello.S](hello.S), as **`/usr/guest/hello.S`** — the thing
+The image ships one source file, [hello.S](hello.S), as **`/home/guest/hello.S`** — the thing
 to point `cc` at:
 
 ```
@@ -247,7 +247,11 @@ Three deliberate choices in it:
   this one calls nothing: `crt0` and the `exit()` behind it are all libc contributes.
 * **It lives in the guest account's home**, which is the only directory on the image a
   non-root user can write in besides `/tmp` — and `cc` writes `hello.o` and `a.out` into the
-  *current* directory, so that is where a logged-in user can build it where it sits.
+  *current* directory, so that is where a logged-in user can build it where it sits. That home
+  was `/usr/guest` until accounts moved to a top-level `/home` of their own: on this image
+  `/usr` is a directory of the root rather than the separate volume v7 hung accounts off, so it
+  keeps the system's second half and nothing else.
+  [root.manifest](../../scripts/root.manifest) carries the argument.
 
 Section 6 of `kernel/test/toolchain` builds it exactly as its header says to, and is the
 only place `cpp` and `as` run in one command anywhere.

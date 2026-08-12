@@ -267,7 +267,7 @@ in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). **A port is n
 compiles**: it is done when `make` builds, `ctest` passes, and the program is on the image with a
 test asserting it.
 
-**The disk is one EC-5052: 2000 blocks, 6,144,000 bytes, and about 92 are free.** That is room for
+**The disk is one EC-5052: 2000 blocks, 6,144,000 bytes, and about 91 are free.** That is room for
 a good deal but not for anything: weigh a large addition *before* the port, and **take the number
 from a build** — `b6fsutil` prints it every time `root.img` is made — rather than from this
 paragraph, which has drifted before. What to budget for:
