@@ -28,15 +28,13 @@ specifications found in a password file. Argument 0 of the command interpreter i
 
 ## THIS MACHINE
 
-**Note:** three of the files below are not on this system, and each fails quietly rather than
+**Note:** two of the files below are not on this system, and each fails quietly rather than
 being cut out of the program:
 
 /usr/adm/wtmp
 : The permanent login history. Nothing reads it - there is no *last* here - so it is not on the
   image and the append is skipped.
 
-/usr/spool/mail
-: There is no mail(1), so `You have mail.` never prints.
 
 /usr/bin
 : Named by the PATH *login* exports, and empty of meaning: the shell's own default already
@@ -60,7 +58,7 @@ command.
 : accounting; absent here
 
 /usr/spool/mail/\*
-: mail; absent here
+: mailboxes; `You have mail.` is printed when the caller's is not empty
 
 /etc/motd
 : message-of-the-day

@@ -303,6 +303,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/look
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/m4
+    ${B6_ROOTFS}/bin/mail
     ${B6_ROOTFS}/bin/make
     ${B6_ROOTFS}/bin/mesg
     ${B6_ROOTFS}/bin/mkdir
@@ -470,7 +471,8 @@ add_test(NAME rootimg_setuid
                    ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/rmdir$' && \
                    ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/newgrp$' && \
                    ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/passwd$' && \
-                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/su$'"
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/su$' && \
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/mail$'"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
 

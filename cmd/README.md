@@ -264,7 +264,7 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **158 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **140 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
 what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32, `bc` 20 with one more
 block for the `/usr/lib/lib.b` its `-l` reads, `units` 14 with three of them the
@@ -280,7 +280,12 @@ and so paying an indirect block as well, and **three of those blocks are directo
 `/usr/spool`, `/usr/spool/at` and its `past` — which is the first time this tally has had to
 count any. `cron` is **10** (task C22): 8 for the program, one of them the same indirect block,
 1 for `/usr/lib/crontab`, and **1 for a file that is not the program's at all** — `/etc/rc`,
-whose comment block crossed into a third block when the task explained itself there. `update` is
+whose comment block crossed into a third block when the task explained itself there. `mail` is
+**18** (task C28) and the largest single addition since `awk`: 16 for the program, one of them
+that indirect block again, **one for `/usr/spool/mail`** — the second time this tally has had to
+count a directory, after C21's three — and **one for its own manual page**, which crossed 3072
+bytes when the port corrected it. That last block is C22's `/etc/rc` lesson repeating: the page
+was already on the image and looked free, so the task budgeted seventeen and measured eighteen. `update` is
 the other end of the range and the cheapest thing here: **1 block**, 152 words, no stdio. `awk` is also the one whose *own* ceiling was never this
 number: what is left below the stack after its image is the whole of its heap
 ([awk/README.md](awk/README.md)).
@@ -499,6 +504,36 @@ The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/d
 One paragraph per finished task, newest first, kept here rather than in [TODO.md](TODO.md)
 because a work plan should shrink as it is worked and this does not. Each points at the port's
 own `README.md` for the detail; what is here is the part a *later* port needs to know.
+
+C28 put `/bin/mail` on the image, eighteen blocks, and it is the first task here that began by
+**overturning a row of [TODO.md](TODO.md)'s "Not ported, and why" table** rather than by taking one
+of its open numbers. Four things it settled ([mail/README.md](mail/README.md)):
+
+* **A refusal is a claim about the machine, and the machine moves under it.** Three of the row's
+  four reasons were still true and cost a `dir` stanza between them; the fourth — *"there is one
+  user on this machine and nowhere for a letter to go"* — had quietly stopped being true two tasks
+  earlier, `kernel/test/multi` having logged root and guest in **at the same instant** since 29c.
+  The line counts in that table are there so a row can be re-costed; **the sentences are what want
+  re-reading**, and nothing re-reads them on its own.
+* **A program that drops privilege and then needs it back re-execs itself.** `mail` is setuid root
+  for `chown(2)` and the lock's `chmod(2)`, and `printmail()`'s *first statement* gives that away
+  permanently, there being no saved id. So the interactive `m user` command cannot deliver — it
+  forks and runs `mail user`, and a fresh setuid process does it. v7's `sendrmt()` looks like a
+  uucp artifact and is really a privilege boundary, which is why dropping uucp did not drop the
+  fork. The general form: **the drop point is the design**, and where a later program needs
+  privilege on both sides of user input, a second process is the answer rather than a later drop.
+* **A `b6_progtest` case whose program can write to its own input file cannot read that file out of
+  the source tree.** Every mutating command in `mail` rewrites the mailbox `-f` named, so a single
+  `d` in a `.in` would edit a checked-in fixture and every later run would test something else.
+  `mail/test/` copies its fixtures into the build directory and names them relatively — the only
+  test directory here that does — and that also sidesteps `@srcdir@` being an absolute path against
+  a program that bounds its arguments. Any future port that *edits* what it is given wants the same
+  shape.
+* **A name a program defines may already be in libc, and linking proves nothing.** `mail`'s
+  `lock()` collides with the real `lock(2)` stub in `lib/libc`; §1 named `abs()` and `isnumber()`
+  and this is the third. Nothing failed — the program's own definition simply wins until the day
+  something drags that object in. Check a new port's file-scope names against `b6nm` on `libc.a`
+  rather than against the link succeeding.
 
 C22 put `/etc/cron` and `/usr/lib/crontab` on the image, ten blocks between them, and with it
 **the second daemon this port has had** and the periodic caller `at(1)` has claimed since C21.

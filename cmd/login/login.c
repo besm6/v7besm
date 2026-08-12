@@ -47,14 +47,13 @@
 //     what /etc/utmp's format is.
 //
 // WHAT IS NOT ON THIS IMAGE, and is left in rather than cut, because each is one call that
-// fails cleanly and each comes back with a task of its own:
+// fails cleanly and each comes back with a task of its own.  (There were three until task C28
+// put mail(1) on the image: /usr/spool/mail is there now and "You have mail." reaches a reader.)
 //
 //   /usr/adm/wtmp   the permanent login history.  cmd/init writes it too and treats its
 //                   absence as benign; nothing reads it until `last', which no task carries,
 //                   so a file appended to on every getty respawn would have no reader.  The
 //                   open() fails and login carries on.  See README.md.
-//   /usr/spool/mail the mail spool.  access() fails, "You have mail." never prints, and mail
-//                   itself is task C10's.
 //   /usr/bin        named by envinit's PATH, which is v7's string kept verbatim.  The shell's
 //                   own default already reaches /bin, and the missing directory costs one
 //                   failed exec per command not found.

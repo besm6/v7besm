@@ -181,16 +181,27 @@ dir /mnt
 # uid to run the job under.  `past' is 0777 too and not 0755 -- atrun's child unlinks the job
 # AFTER dropping to its owner, and unlink asks for write permission on the directory.
 #
-# NOTHING CREATES THESE AT RUN TIME.  at does not mkdir its spool and atrun does not either;
-# both simply fail without them, which is what makes them manifest entries rather than a
-# boot-time step.  /usr/spool/mail is deliberately still absent: cmd/login probes for it with
-# access() and must go on not finding it (cmd/login/README.md), and mail is refused in
-# cmd/TODO.md.
+# NOTHING CREATES THESE AT RUN TIME.  at does not mkdir its spool and atrun does not either,
+# and neither does mail; all three simply fail without them, which is what makes them manifest
+# entries rather than a boot-time step.
+#
+# /usr/spool/mail ARRIVED WITH TASK C28 and is the exact converse of `at's argument above, which
+# is why it is 0755 and root's rather than 0777.  at is not setuid, so a user creates their own
+# spool file and the directory has to be writable by everyone; mail IS setuid root, so root
+# creates each mailbox and chown(2)s it to the recipient, and nobody needs write permission here
+# at all.  0755 also means a user cannot unlink somebody else's mailbox -- unlink asks for write
+# permission on the DIRECTORY, which is the same rule that made `past' 0777.  copyback() rewrites
+# a mailbox after mail has dropped privilege, but that truncates a file the caller already owns
+# and needs nothing from this directory.
+#
+# cmd/login has probed this path with access() since task C6 and found nothing every time; it is
+# what makes `You have mail.' reachable for the first time (cmd/login/login.c).
 dir /usr/spool
 dir /usr/spool/at
 mode 0777
 dir /usr/spool/at/past
 mode 0777
+dir /usr/spool/mail
 
 dir /usr/guest
 owner 7
@@ -1040,6 +1051,22 @@ file /bin/su            # cmd/su -- SETUID ROOT: setuid(2)/setgid(2) to another 
 source ../../rootfs/bin/su
 mode 04755
 
+# THE SEVENTH, task C28, and the only one that borrows root to touch ANOTHER USER'S FILE
+# rather than a directory or its own identity.  mail's deliver() does three things an
+# ordinary user cannot: it appends to a mailbox that is 0644 and somebody else's, it
+# chown(2)s a mailbox it has just created to the recipient -- suser()-gated, and gated
+# precisely so a user cannot give a file away -- and it chmod(2)s the user-execute bit that
+# is this system's mailbox lock, which owner() would refuse.
+#
+# The same ORDER argument as the three above, and here it is the whole safety case: mail is
+# an INTERACTIVE program with a shell escape (`!cmd'), a `save to any file' command and a
+# -f that opens whatever it is handed.  setuid(getuid()) is the FIRST STATEMENT of
+# printmail() (cmd/mail/mail.c), so every one of those runs as the reader; the borrowed root
+# lives in deliver() and nowhere else.  Moving that line would hand root to the shell escape.
+file /bin/mail          # cmd/mail -- SETUID ROOT: chown(2) and chmod(2) on another mailbox
+source ../../rootfs/bin/mail
+mode 04755
+
 # ---- the static files of /etc ----------------------------------------------------
 #
 # /etc/rc is 0644, NOT 0755: runcom() in cmd/init/init.c execs `sh /etc/rc', never the
@@ -1635,13 +1662,14 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  FOUR OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, calendar, mail and sa; crypt and makekey landed with task C19, update
-# with C20, at with C21 and cron with C22.  One of the four is a port cmd/TODO.md still has
-# open -- calendar, C23 -- and its page is already correct when it lands; mail, ac and sa are
-# in that file's "Not ported, and why" table and will never have a program, which is v7's own
-# habit -- a manual page is where a decision about a program is recorded whether or not the
-# program exists.
+# is worth less than the blocks.  THREE OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac, calendar and sa; crypt and makekey landed with task C19, update
+# with C20, at with C21, cron with C22 and mail with C28.  One of the three is a port
+# cmd/TODO.md still has open -- calendar, C23 -- and its page is already correct when it
+# lands; ac and sa are in that file's "Not ported, and why" table and will never have a
+# program, which is v7's own habit -- a manual page is where a decision about a program is
+# recorded whether or not the program exists.  mail was in that table too until C28 read the
+# preamble that says each row can be re-examined.
 #
 # WHAT READS THEM is /usr/bin/man below, which finds the file, and /usr/bin/manview beside
 # it, which formats what man found.  THEY ARE STAGED AS SOURCES AND NOT PREFORMATTED, which is

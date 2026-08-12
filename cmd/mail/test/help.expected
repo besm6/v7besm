@@ -1,0 +1,25 @@
+From root Wed Jan  3 11:15:00 1979
+третье письмо
+
+? usage
+q	quit
+x	exit without changing mail
+p	print
+s[file]	save (default mbox)
+w[file]	same without header
+-	print previous
+d	delete
++	next (no delete)
+m user	mail to user
+! cmd	execute cmd
+? q	quit
+x	exit without changing mail
+p	print
+s[file]	save (default mbox)
+w[file]	same without header
+-	print previous
+d	delete
++	next (no delete)
+m user	mail to user
+! cmd	execute cmd
+? 

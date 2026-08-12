@@ -97,13 +97,15 @@ against one `.expected` and the two no longer agree.
 ## Three files it wants and this image has not got
 
 Each fails cleanly and each is left in the program rather than cut out, because each comes back
-with a task of its own:
+with a task of its own — two of them now, the third having been answered:
 
 * **`/usr/adm/wtmp`** — the permanent login history. `init`'s `rmut()` writes it too, and both
   treat its absence as benign. It is deliberately **not** on the image: nothing reads it, `last`
   is in no task, and a file appended to on every getty respawn with no reader is not worth
   carrying. It belongs with the accounting commands, task C8.
-* **`/usr/spool/mail`** — `access()` fails, `You have mail.` never prints. `mail` is task C10's.
+* **`/usr/spool/mail`** — **no longer one of them.** Task C28 put `mail(1)` on the image and
+  `../../root.manifest` the directory with it, so this probe finds something and `You have mail.`
+  prints for the first time. It is the only line of `login` whose reader arrived after it did.
 * **`/usr/bin`** — named by the PATH `login` exports, which is v7's string kept verbatim. The
   shell's own default already reaches `/bin`.
 

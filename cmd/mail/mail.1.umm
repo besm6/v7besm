@@ -37,7 +37,9 @@ w [ *file* ] ...
 : Save the message, without a header, in the named *files* (`mbox` default).
 
 m [ *person* ] ...
-: Mail the message to the named *persons* (yourself is default).
+: Mail the message to the named *persons*. Note: v7 documented yourself as the default, but a
+bare `m` has never done that in this code — it takes the no-argument arm and mails nothing at
+all. The behaviour is v7's and is left alone; the sentence is what was wrong.
 
 EOT (control-D)
 : Put unexamined mail back in the mailbox and stop.
@@ -60,17 +62,47 @@ An interrupt stops the printing of the current letter. The optional argument **-
 When *persons* are named, *mail* takes the standard input up to an end-of-file (or a line with
 just `.`) and adds it to each *person's* `mail` file. The message is preceded by the sender's
 name and a postmark. Lines that look like postmarks are prepended with `>`. A *person* is
-usually a user name recognized by login(1). To denote a recipient on a remote system, prefix
-*person* by the system name and exclamation mark (see uucp(1)).
+usually a user name recognized by login(1).
+
+Note: **there is no remote mail here.** v7 let a *person* be `system!user` and handed the letter
+to uux(1); this system has neither uucp(1) nor uux(1), both refused in the port, and the
+`<whoami.h>` that named the local system was pruned from the header tree. A *person* containing
+an exclamation mark is refused with
+
+| mail: no remote mail: *person*
+
+the letter is saved in `dead.letter` as any other undeliverable one is, and *mail* exits 1.
 
 The **-f** option causes the named file, e.g. `mbox`, to be printed as if it were the mail
 file.
 
-Each user owns his own mailbox, which is by default generally readable but not writable. The
-command does not delete an empty mailbox nor change its mode, so a user may make it unreadable
-if desired.
+Note: the file name is bounded at 128 characters and a longer one is refused rather than
+truncated — a shortened path names some other file, and *mail* is willing to rewrite what it is
+given. Note: **-f does not lock**. The lock below is a protocol among the processes that share
+`/usr/spool/mail`; a private `mbox` is not one of those, and locking it would change the mode of
+a file of your own for no reader's benefit.
 
-When a user logs in he is informed of the presence of mail.
+Each user owns his own mailbox, which is by default generally readable but not writable — mode
+0644, owned by the recipient, in a `/usr/spool/mail` that is mode 0755 and the super-user's, so
+that nobody can unlink anybody else's mailbox. The command does not delete an empty mailbox nor
+change its mode, so a user may make it unreadable if desired.
+
+Note: `/bin/mail` is **setuid to the super-user**, because creating a mailbox for someone else
+needs chown(2) and taking the lock needs chmod(2) on a file *mail* does not own. It gives that
+privilege back — real user-id and all — as the very first act of printing mail, so the `!`
+escape, the `s` command, **-f** and everything else typed at the `?` prompt run as whoever is
+typing. That is also why `m` hands the letter to a fresh *mail* rather than writing the mailbox
+itself: by then it no longer can.
+
+Note: at most 300 letters are read from one mailbox. Past that *mail* refuses with a diagnostic;
+v7 had the same limit and stored past the end of its own table instead.
+
+Note: there is no `rmail`. v7 linked one to *mail* so that uux(1) could deliver a letter without
+offering the interactive half; with no uux(1) there is nothing to link it for.
+
+When a user logs in he is informed of the presence of mail. Note: this became true only when
+*mail* was ported — login(1) has probed for the mailbox since it was written, and until then
+never found one.
 
 ## FILES
 
@@ -79,13 +111,20 @@ When a user logs in he is informed of the presence of mail.
 | mbox saved mail
 | /tmp/ma\* temp file
 | dead.letter unmailable text
-| uux(1)
 
 ## SEE ALSO
 
-xsend(1), write(1), uucp(1)
+write(1), login(1), passwd(5)
+
+Note: v7 also named xsend(1) and uucp(1) here. Neither is on this system.
 
 ## BUGS
 
 There is a locking mechanism intended to prevent two senders from accessing the same mailbox,
 but it is not perfect and races are possible.
+
+Note: the lock is the mailbox's **owner-execute bit**, set while a letter is being added and
+cleared afterwards, and a lock more than sixty seconds old is treated as stale and taken. The
+race v7 admits to is that stat(2) and chmod(2) are two calls with nothing between them holding
+the file: two senders can both find the bit clear. There is no flock(2) or fcntl(2) on this
+system to do better with.
