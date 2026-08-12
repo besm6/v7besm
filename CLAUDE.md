@@ -9,7 +9,7 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
   `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
 - **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
-  plus **106 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
+  plus **107 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
   is `b6_prog()` calls under `cmd/` whose `DEST` is not `test/…`, and nothing but that rule.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
@@ -59,13 +59,13 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 198 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 197 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
 `/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14,
 `/bin/m4` 19, `/bin/make` 24, `/bin/dc` 32, `/bin/bc` 20 with one more for
 `/usr/lib/lib.b`, `/bin/units` 14 with three for `/usr/lib/units`, `/bin/awk` 42, and
 `/bin/crypt` 7 with 3 for `/usr/lib/makekey` and **5 more for `/bin/ed`**, whose restored
-`-x` links `crypt(3)` and `getpass(3)` and so stdio with them.
+`-x` links `crypt(3)` and `getpass(3)` and so stdio with them, and `/etc/update` **1**.
 
 **Twelve programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc`, `yacc`, `lex` — as the host `b6*` tools and, from the same sources under
@@ -149,8 +149,9 @@ copy.
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
 - **Three tests boot the kernel**, and only three: `boot`, a one-second smoke test that it
   still reaches a shell prompt; `multi`, which types `^D` at that prompt and goes on into
-  multi-user mode — `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and root on
-  `/dev/console` with guest on `/dev/tty1` at the same instant; and `core`, which mounts the
+  multi-user mode — `/etc/rc` and the `/etc/update` daemon it leaves running, a getty per line
+  of `/etc/ttys`, `crypt(3)`, and root on `/dev/console` with guest on `/dev/tty1` at the same
+  instant; and `core`, which mounts the
   test pack and runs `/mnt/test/coret`. `multi` is also the worked example for typing at the
   guest and for driving the second Consul, which needs the host program
   `kernel/test/ttyhost.c`. When a README claims `fsck` repairing a pack, the swapper under

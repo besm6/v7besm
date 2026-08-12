@@ -225,6 +225,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/pstat
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/umount
+    ${B6_ROOTFS}/etc/update
     ${B6_ROOTFS}/etc/wall
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd

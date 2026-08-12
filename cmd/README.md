@@ -249,25 +249,29 @@ Where a fixed buffer can be sized so that nothing has to test it, do that instea
    ../../rootfs/bin/<x>`. Paths resolve against `b6fsutil`'s working directory
    (`build/kernel/test`), not against the manifest.
 4. A line in [../etc/rc](../etc/rc) if the boot script wants it — `/etc/rc` runs with **no
-   terminal**, so anything meant to be seen redirects to `/dev/console` for itself. Nothing
-   asserts `/etc/rc` any more: `kernel/test/console` was its one home and is deleted.
+   terminal**, so anything meant to be seen redirects to `/dev/console` for itself. The
+   assertion goes in `kernel/test/multi`, which inherited the job when `kernel/test/console` was
+   deleted: it is the one surviving test that types the `^D` that gets past the single-user
+   shell, and it now asserts both of that script's lines — the `date` it prints and, since task
+   C20, the `/etc/update` it leaves running ([update/README.md](update/README.md)).
 5. The test, per §9.
 
 One list must grow with the program and nothing catches it but a failing build: `ROOTFS_FILES`
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **198 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **197 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
 what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32, `bc` 20 with one more
 block for the `/usr/lib/lib.b` its `-l` reads, `units` 14 with three of them the
 `/usr/lib/units` table it cannot run without, `awk` **42**, one of them its enlarged
 manual page — the largest single addition yet, and a reminder that the number is worth reading
-before a port rather than after — and `crypt` 16, of which the program itself is 7 and
-`/usr/lib/makekey` 3: **the other 5 are `ed`**, which grew by half again when task C19 gave it
+before a port rather than after — `crypt` 16, of which the program itself is 7 and
+`/usr/lib/makekey` 3 — **the other 5 are `ed`**, which grew by half again when task C19 gave it
 `-x` back, because the restored mode links `crypt(3)` and `getpass(3)` and `getpass(3)` brings
 the whole of stdio with it. **A shared object can cost more than it looks**, and the place to
-read that is `b6size` on the other program, not on the new one. `awk` is also the one whose *own* ceiling was never this
+read that is `b6size` on the other program, not on the new one. `update` is the other end of the
+range and the cheapest thing here: **1 block**, 152 words, no stdio. `awk` is also the one whose *own* ceiling was never this
 number: what is left below the stack after its image is the whole of its heap
 ([awk/README.md](awk/README.md)).
 The whole of `/usr/man` is 302 blocks, `man` 12 and

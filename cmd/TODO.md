@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C19 and C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C20 and C26
 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -45,13 +45,44 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C20 | `update` | one of the two [../etc/rc](../etc/rc) lines | trivial |
 | C21 | `at`, `atrun` | | medium, blocked on a clock |
 | C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium, blocked on a clock |
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C20.** C19 put `/bin/crypt` and `/usr/lib/makekey` on the image, and what it
+**Where to start: C21**, and it starts by answering the clock — C21, C22 and C23 are three tasks
+behind one kernel question, and nothing below is unblocked until somebody answers it.
+
+C20 put `/etc/update` on the image, one block and 152 words, and with it **the first daemon this
+port has had** — the first program that outlives the shell that started it. What it settled was
+not the port, which is a `sync()` in a loop, but the two claims that had kept the line out of
+[../etc/rc](../etc/rc), and **both were wrong**
+([update/README.md](update/README.md)):
+
+* **A daemon in a script `init` re-runs does not accumulate.** `/etc/rc` really does run on every
+  pass through init's loop — but `shutdown()` runs *first* on every pass, and `kill(-1, SIGKILL)`
+  from root spares only `proc[0]` and `proc[1]`, so the previous copy is dead and reaped before
+  the line is read again. The rule to carry: **read `shutdown()` before believing a claim about
+  what survives a pass**.
+* **`/etc/rc` has an assertion home again, and had one all along.** `kernel/test/console` was
+  deleted, but `kernel/test/multi` types the same `^D`, runs the same script, and had been
+  matching the `date` line for some time unnoticed. It now asks `ps -ax` for the daemon as well.
+  **That reopens the two lines deferred for want of an assertion** — the boot-time `fsck` and
+  `rm -f /tmp/*` — which wait on nothing now but somebody willing to write the stage.
+
+The lesson worth carrying out of the *test*, and it cost a rewrite: **an expect string can be
+satisfied by the shell's own echo**. `ps -ax | grep update` puts the word `update` into the console
+stream before `grep` runs, so with no daemon at all the prompt follows the echo and the rule
+matches — a green test asserting nothing. The pattern is typed one letter short for that reason,
+and the stage was checked by deleting the `/etc/rc` line and watching `multi` fail.
+
+The one true cost is a state transition rather than a leak: a permanent child means
+`multiple()`'s `wait() == -1` never comes back, so init's `allgone` return to single-user and
+`merge()`'s two `/etc/ttys` diagnostics are set and never said. That is v7's own arithmetic —
+v7's `rc` started `update` and `cron` on the same reasoning — and it is written down in
+`multiple()` rather than fixed.
+
+C19 put `/bin/crypt` and `/usr/lib/makekey` on the image, and what it
 settled was larger than two small programs. **A key schedule that overflows is not a key
 schedule here**: v7's `crypt` derives its rotor through a `long` that wraps at 32 bits, and
 `b$mul` on this machine keeps the HIGH bits of an overflowing product, so the arithmetic had to
@@ -116,21 +147,14 @@ it**, the cut in [stty/README.md](stty/README.md) being deliberately subtractive
 request and a hang-up-on-last-close request are both silently ignored. Both are worth knowing
 before somebody reports them as bugs.
 
-**[../etc/rc](../etc/rc) still wants four lines.** `update` waits on C20 and `cron` on C22. A
-boot-time `fsck` and the `rm -f /tmp/*` line wait on something else: both programs exist, but §7
-step 4 gave a line in that script exactly one home for its assertion, `kernel/test/console`,
-and that test is now **deleted** along with the rest of the tests that booted. So the deferral
-stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
+**[../etc/rc](../etc/rc) still wants three lines**, and only one of them waits on a program:
+`cron`, which is C22 and is blocked with C21 on the clock. A boot-time `fsck` and the
+`rm -f /tmp/*` line wait on nothing but an assertion, and **that excuse expired with C20** —
+`kernel/test/multi` runs the script and asserts two of its lines already, so a third and a fourth
+are a stage each in `multi.ini`. Whoever writes them should read what C20 learned about an expect
+string an echo can satisfy, and note that a `fsck` which repairs the mounted root does not return.
 
 ---
-
-## C20. `update`
-
-`update/update.c`, 38 lines — a `sync()` in a loop — and one of the two [../etc/rc](../etc/rc)
-lines still missing. Trivial to port and **not trivial to add to the boot script**: it is a
-**daemon**, and `/etc/rc` runs on every pass through `init`'s loop, so the line as v7 wrote it
-leaves a second copy running per pass. Decide that before adding it, and remember §7 step 4 — the
-assertion has one home and it is DISABLED.
 
 ## C21. `at` and `atrun`
 
@@ -210,5 +234,5 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 | `prof.c` | 310 | Reads a `mon.out` that nothing produces, and nothing will: the kernel decided against profiling, so `profil(2)` **refuses** with `EINVAL` (`../doc/Besm6_Kernel_Reference.md`, "Known consequences, accepted"), there is no `monitor`/`mcount` in libc, and `cc` has no `-p`. Reconsider only as the last step of porting all four; `b6sim` profiles a program today with no kernel help. |
 | `cb.c`, `diff3.c`, `tabs.c` | 366 + 423 + 196 | Curiosities with a real cost and no caller. `cb` is a C beautifier superseded by this repo's own clang-format; `diff3` wants three files and a merge nobody does here; `tabs` sets hardware tab stops on terminals this machine does not have — the Consul typewriter is not one of them. |
 | `cc.c`, `as/`, `ld.c`, `nm.c`, `ar.c`, `size.c`, `strip.c`, `ranlib.c`, `arcv.c` | | PDP-11 `a.out`, PDP-11 opcodes and PDP-11 registers; nothing in them survives retargeting. The BESM-6 tools were written for this repo instead, and task C9 built every one of them a second time for the machine itself — see each tool's "Building for the BESM-6". |
-| `ac.c`, `sa.c`, `accton.c` | 251 + 489 + 16 | Process accounting. The kernel side EXISTS and works — `acct(2)` is a real gate ([../kernel/acct.c](../kernel/acct.c), `<sys/acct.h>`), which is what makes this a decision rather than a gap. Nothing needs it: the machine has one operator, there is nobody to bill, and `sa`'s whole subject is digesting a record nothing on this image writes. It would also want a `/usr/adm` that [../root.manifest](../root.manifest) does not have, and a boot-time `accton` line in [../etc/rc](../etc/rc) whose only assertion home was the deleted `kernel/test/console`. Reconsider if this machine ever has more than one user who matters. |
+| `ac.c`, `sa.c`, `accton.c` | 251 + 489 + 16 | Process accounting. The kernel side EXISTS and works — `acct(2)` is a real gate ([../kernel/acct.c](../kernel/acct.c), `<sys/acct.h>`), which is what makes this a decision rather than a gap. Nothing needs it: the machine has one operator, there is nobody to bill, and `sa`'s whole subject is digesting a record nothing on this image writes. It would also want a `/usr/adm` that [../root.manifest](../root.manifest) does not have, and a boot-time `accton` line in [../etc/rc](../etc/rc), which `kernel/test/multi` could assert since C20 but has nothing to assert about. Reconsider if this machine ever has more than one user who matters. |
 | `random.c`, `sp.c` … | | Curiosities. Port one if it is ever wanted; none is on a path to anything. |

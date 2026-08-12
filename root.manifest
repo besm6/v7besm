@@ -306,6 +306,17 @@ file /etc/wall          # cmd/wall -- task C6.  One forked child per live /etc/u
 source ../../rootfs/etc/wall
 mode 0755
 
+# /etc AND NOT /bin for the same reason as init and getty above: nobody types this one either.
+# THE FIRST DAEMON ON THIS IMAGE -- /etc/rc starts it and it runs until the machine stops,
+# syncing the buffer cache every thirty seconds.  It is safe in a script init re-runs on every
+# pass through its loop because shutdown() runs first on every pass and kill(-1) spares only
+# process 0 and process 1; cmd/update/README.md is the argument, kernel/test/multi asks
+# `ps -ax' for it.  NOT setuid: sync(2) is ungated and init runs the script as root.
+file /etc/update        # cmd/update -- task C20.  The other half of /bin/sync: the flush
+                        # nobody has to type
+source ../../rootfs/etc/update
+mode 0755
+
 # /etc/mtab IS NOT HERE, and that is the design rather than an omission: the first mount of a
 # boot creates it (cmd/mount/mtab.c), a missing one reads as an empty table, and an image
 # that shipped one would be shipping a claim about what is mounted that no boot had made.
@@ -1580,9 +1591,9 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  NINE OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, at, calendar, cron, crypt, mail, makekey,
-# sa and update.  Six are ports cmd/TODO.md still has open and their pages are
+# is worth less than the blocks.  SIX OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac, at, calendar, cron, mail and sa; crypt and makekey landed with task C19
+# and update with C20.  Three are ports cmd/TODO.md still has open and their pages are
 # already correct when one lands; mail, ac and sa are in that file's "Not ported, and why"
 # table and will never have a program, which is v7's own habit -- a manual page is where a
 # decision about a program is recorded whether or not the program exists.

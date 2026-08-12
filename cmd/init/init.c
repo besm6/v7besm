@@ -356,6 +356,12 @@ static void multiple(void)
         // Note why on the way, unless merge() has already said something more precise:
         // when it is a missing or empty /etc/ttys that emptied the line table, its own
         // message is the useful one and this generic line must not overwrite it.
+        //
+        // SINCE TASK C20 THIS ARM IS UNREACHABLE, and it is v7's own arithmetic rather
+        // than a defect: /etc/rc starts /etc/update, which never exits and is reparented
+        // here, so init always has a child and wait() never returns -1.  The cost is that
+        // the two diagnostics above -- allgone, and merge()'s nottys/nolines, which single()
+        // prints on the way past -- are set and never said.  cmd/update/README.md.
         if (pid == -1) {
             if (pending == 0)
                 pending = allgone;
