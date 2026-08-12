@@ -1,93 +1,45 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-/*
- *	A one-rotor machine designed along the lines of Enigma
- *	but considerably trivialized.
- */
-
-#define ECHO 010
+//
+// crypt -- encode and decode.
+//
+//	crypt [ password ]
+//
+// The machine is an involution, so the same command undoes itself and there is no decrypt
+// flag.  ./rotor.c is the machine; ./README.md is the account of the port.
+//
+// v7 ran the rotor inline over getchar()/putchar().  This reads a block, hands it to
+// crblock() and writes it back, so no stream byte is ever looked at here -- which is how
+// ../README.md §11 is answered: there is nowhere left to put a mask.
+//
+// NOT SETUID: it reads its own input and writes its own output.
+//
 #include <stdio.h>
-#define ROTORSZ 256
-#define MASK 0377
-char	t1[ROTORSZ];
-char	t2[ROTORSZ];
-char	t3[ROTORSZ];
-char	*getpass();
+#include <unistd.h>
 
-setup(pw)
-char *pw;
+#include "rotor.h"
+
+static char perm[PERMSZ];
+static char cbuf[BUFSIZ]; // static: 512 words against a 4,096-word stack (§6)
+
+int main(int argc, char **argv)
 {
-	int ic, i, k, temp, pf[2];
-	unsigned random;
-	char buf[13];
-	long seed;
+    char *key;
+    long pos;
+    int n;
 
-	strncpy(buf, pw, 8);
-	while (*pw)
-		*pw++ = '\0';
-	buf[8] = buf[0];
-	buf[9] = buf[1];
-	pipe(pf);
-	if (fork()==0) {
-		close(0);
-		close(1);
-		dup(pf[0]);
-		dup(pf[1]);
-		execl("/usr/lib/makekey", "-", 0);
-		execl("/lib/makekey", "-", 0);
-		exit(1);
-	}
-	write(pf[1], buf, 10);
-	wait((int *)NULL);
-	if (read(pf[0], buf, 13) != 13) {
-		fprintf(stderr, "crypt: cannot generate key\n");
-		exit(1);
-	}
-	seed = 123;
-	for (i=0; i<13; i++)
-		seed = seed*buf[i] + i;
-	for(i=0;i<ROTORSZ;i++)
-		t1[i] = i;
-	for(i=0;i<ROTORSZ;i++) {
-		seed = 5*seed + buf[i%13];
-		random = seed % 65521;
-		k = ROTORSZ-1 - i;
-		ic = (random&MASK)%(k+1);
-		random >>= 8;
-		temp = t1[k];
-		t1[k] = t1[ic];
-		t1[ic] = temp;
-		if(t3[k]!=0) continue;
-		ic = (random&MASK) % k;
-		while(t3[ic]!=0) ic = (ic+1) % k;
-		t3[k] = ic;
-		t3[ic] = k;
-	}
-	for(i=0;i<ROTORSZ;i++)
-		t2[t1[i]&MASK] = i;
-}
+    // getpass(3) cannot fail -- it falls back to stdin when there is no /dev/tty -- and it
+    // reads eight characters, every one the rotor uses.
+    key = (argc != 2) ? getpass("Enter key:") : argv[1];
 
-main(argc, argv)
-char *argv[];
-{
-	register i, n1, n2;
+    crinit(key, perm); // destroys the key where it stands, in argv
 
-	if (argc != 2){
-		setup(getpass("Enter key:"));
-	}
-	else
-		setup(argv[1]);
-	n1 = 0;
-	n2 = 0;
-
-	while((i=getchar()) >=0) {
-		i = t2[(t3[(t1[(i+n1)&MASK]+n2)&MASK]-n2)&MASK]-n1;
-		putchar(i);
-		n1++;
-		if(n1==ROTORSZ) {
-			n1 = 0;
-			n2++;
-			if(n2==ROTORSZ) n2 = 0;
-		}
-	}
+    pos = 0;
+    while ((n = fread(cbuf, 1, sizeof(cbuf), stdin)) > 0) {
+        crblock(perm, cbuf, n, pos);
+        fwrite(cbuf, 1, n, stdout);
+        pos += n;
+    }
+    fflush(stdout);
+    return 0;
 }

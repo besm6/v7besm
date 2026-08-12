@@ -14,12 +14,21 @@
 # NOT SETUID.  Nothing ed does needs privilege: it reads and writes files as its caller, and
 # its temp file lives in /tmp at mode 0777.  See ../README.md SS8 for the general rule and
 # README.md here for what this port did need.
+#
+# ../crypt/rotor.c IS -x, task C19, and ../crypt links the same file: one key schedule is
+# what makes ed.1's and crypt.1's promise that the two interoperate a property of the build
+# rather than a habit.  ../df and ../umount share ../mount/mtab.c the same way.  b6_prog()
+# puts every object in ${name}.dir, so the two builds of it cannot collide.  The -I is for
+# rotor.h -- and it is a §1 blind spot, b6_obj's header dependency being the system tree, so
+# touch ed.c after changing that header.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.
 set(KINC ${CMAKE_SOURCE_DIR}/include)
 file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)
 
-b6_prog(ed DEST bin/ed SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ed.c)
+b6_prog(ed DEST bin/ed
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ed.c ${CMAKE_CURRENT_SOURCE_DIR}/../crypt/rotor.c
+    CFLAGS -I${CMAKE_CURRENT_SOURCE_DIR}/../crypt)
 
 add_subdirectory(test)

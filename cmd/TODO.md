@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C18 and C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C19 and C26
 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -45,14 +45,25 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C19 | `crypt`, `makekey` | | small |
 | C20 | `update` | one of the two [../etc/rc](../etc/rc) lines | trivial |
 | C21 | `at`, `atrun` | | medium, blocked on a clock |
 | C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium, blocked on a clock |
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C19.** C18 put `/bin/units` on the image and, with it, the first floating-point
+**Where to start: C20.** C19 put `/bin/crypt` and `/usr/lib/makekey` on the image, and what it
+settled was larger than two small programs. **A key schedule that overflows is not a key
+schedule here**: v7's `crypt` derives its rotor through a `long` that wraps at 32 bits, and
+`b$mul` on this machine keeps the HIGH bits of an overflowing product, so the arithmetic had to
+be bounded to 32 bits explicitly — after which this `crypt` is bit-compatible with a PDP-11's
+and the files interchange ([crypt/README.md](crypt/README.md)). It also **retired a premise**:
+`ed` had dropped `-x` on the grounds that `makekey` would never exist and the seed arithmetic
+could not be reproduced, and both were answered, so `-x` is back over the same `rotor.c` that
+`crypt` links — one implementation, so the two manual pages' promise that they interoperate is
+a property of the build. The cost is the lesson worth carrying: **a shared object can cost more
+than it looks**, `ed` growing five blocks because `getpass(3)` brings stdio with it.
+
+C18 put `/bin/units` on the image and, with it, the first floating-point
 program this port has had — which is how it was discovered that **an arithmetic fault stopped the
 machine**: `kernel/trap.c` decoded five ГРП causes and neither of the two arithmetic ones, so a
 floating overflow or divide by zero in any user program reached `panic("trap")`. It decodes seven
@@ -112,13 +123,6 @@ and that test is now **deleted** along with the rest of the tests that booted. S
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
 
 ---
-
-## C19. `crypt` and `makekey`
-
-`crypt/crypt.c` 93 and `makekey/makekey.c` 21, the second as `/usr/lib/makekey`. libc's `crypt(3)`
-already exists (it is what `login` and `passwd` use), so this is two small programs over an
-implementation that is on the image already. §11 matters: `crypt` is a byte filter and must not
-mask anything.
 
 ## C20. `update`
 

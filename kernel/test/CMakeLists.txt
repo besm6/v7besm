@@ -246,6 +246,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/col
     ${B6_ROOTFS}/bin/comm
     ${B6_ROOTFS}/bin/cp
+    ${B6_ROOTFS}/bin/crypt
     ${B6_ROOTFS}/bin/date
     ${B6_ROOTFS}/bin/dc
     ${B6_ROOTFS}/bin/dd
@@ -254,6 +255,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/dmesg
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/usr/lib/diffh
+    ${B6_ROOTFS}/usr/lib/makekey
     ${B6_ROOTFS}/usr/lib/lib.b
     ${B6_ROOTFS}/usr/lib/units
     ${B6_ROOTFS}/usr/lib/yaccpar

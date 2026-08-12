@@ -33,6 +33,13 @@ machine and recirculated a number of times. The 64 bits that come out are distri
 *Makekey* is intended for programs that perform encryption (e.g. *ed* and crypt(1)). Usually
 its input and output will be pipes.
 
+Note: neither *ed* nor crypt(1) execs this program on this system. Both call crypt(3) in the C
+library, which is what *makekey* is, and get the same thirteen bytes without a fork, a pipe and
+an exec. It is here as the filter described above, for a program that wants one.
+
+Note: v7 ignored both read(2) results and would emit thirteen bytes derived from whatever
+memory held when given fewer than ten. Short input is diagnosed here and nothing is written.
+
 ## SEE ALSO
 
 crypt(1), ed(1)

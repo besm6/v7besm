@@ -8,16 +8,17 @@ ed - text editor
 
 ## SYNOPSIS
 
-| **ed** [ **-** ] [ **-q** ] [ name ]
+| **ed** [ **-** ] [ **-q** ] [ **-x** ] [ name ]
 
 ## DESCRIPTION
 
 *Ed* is the standard text editor.
 
 If a *name* argument is given, *ed* simulates an *e* command (see below) on the named file;
-that is to say, the file is read into *ed's* buffer so that it can be edited. Note: **-x** is
-not implemented on this system; see BUGS. The optional **-** suppresses the printing of
-character counts by *e, r,* and *w* commands.
+that is to say, the file is read into *ed's* buffer so that it can be edited. If the optional
+**-x** is present, an encryption key is demanded and the temporary file is encrypted as well as
+the text; see the *x* command below. The optional **-** suppresses the printing of character
+counts by *e, r,* and *w* commands.
 
 Note: the optional **-q** restores the quit signal to its default action, so that a quit dumps
 core instead of being ignored, and turns the character counts back on. *Ed* has always accepted
@@ -283,6 +284,12 @@ Q
 (1,$)W filename
 : This command is the same as *w,* except that the addressed lines are appended to the file.
 
+x
+: A key is demanded from the terminal and *ed* enters encrypting mode. Text read or written from
+  now on is encrypted by the crypt(1) algorithm under that key, and an empty key turns the mode
+  off again. Note: the temporary file is *not* encrypted by this command, its own key having
+  been chosen when *ed* started; **-x** on the command line is the form that protects both.
+
 ($)=
 : The line number of the addressed line is typed. `.` is unchanged by this command.
 
@@ -347,7 +354,7 @@ obeyed regardless.
 
 ## BUGS
 
-| Note: **-x,** the *x* command and the whole of the crypt(1) algorithm are *not implemented* on this system, and this is the one deliberate divergence in the port. */usr/lib/makekey,* which v7's *ed* execs to derive a key, is not on this image and is in no plan to be, so the mode could never have worked; crypt(1) itself is not ported either. **-x** is accepted and ignored, and *x* is an unknown command and prints `?`.
+| Note: **-x** and the *x* command decrypt every block they read, where v7 decrypted a block only if some byte in it had the top bit set - a guess at whether the file was encrypted at all. That guess cannot survive an eight-bit-transparent editor, which reads Cyrillic plaintext with the top bit set all over it. So **-x** here means the file *is* encrypted, and reading a clear file under it produces nonsense rather than the file.
 | Note: the entry that stood here saying the *l* command mishandles DEL is gone - *l* prints three octal digits now, so DEL lists as `\177`.
 | A *!* command cannot be subject to a *g* command.
 | Because 0 is an illegal address for a *w* command, it is not possible to create an empty file with *ed.*

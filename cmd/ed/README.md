@@ -6,23 +6,29 @@ pass over [ed.c](ed.c) — 50 functions, 46 with an implicit `int`, all with K&R
 27 untyped `register` declarations — is described in that file's own header and is not repeated
 here. What the port *taught* is below.
 
-## It is 4,805 words, and it links no stdio at all
+## It was 4,805 words and linked no stdio at all; `-x` cost both
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
-| `ed` | 95 | 4,027 | 50 | 633 | **4,805** |
+| `ed`, task C3 | 95 | 4,027 | 50 | 633 | **4,805** |
+| `ed`, task C19 | 116 | 6,101 | 344 | 2,183 | **8,744** |
 
-Against the 28,672-word ceiling ([../README.md](../README.md) §6) that is nothing, and the
-interesting part is *how* it is nothing: **there is not one format string in `ed.c`**. Numeric
-output is `putd()` recursing over `putchr()` into a 70-byte line buffer and a `write(2)`, so the
-program links neither `doprnt` nor a `FILE` — and that is what puts it within twenty-four words
-of `cat`, at 4,805 against 4,781, despite being five times the source. Its **text** is 1,038
-words more than `cat`'s and its **bss 911 words less**, which is §6's bottom-three-rows
-observation seen from a third angle: `ed` is the one large program on this image that pays
-nothing for stdio.
+Against the 28,672-word ceiling ([../README.md](../README.md) §6) both are nothing, and the
+interesting part was *how* the first was nothing: **there is not one format string in `ed.c`**.
+Numeric output is `putd()` recursing over `putchr()` into a 70-byte line buffer and a
+`write(2)`, so the program linked neither `doprnt` nor a `FILE` — and that is what put it within
+twenty-four words of `cat`, at 4,805 against 4,781, despite being five times the source. `ed`
+was the one large program on this image that paid nothing for stdio.
 
-It also makes this the first port for which §3's `%D` pass is a *no-op*, which is worth knowing
-before grepping for one.
+**Task C19 ended that, and the shape of the bill is the lesson.** Restoring `-x` (below) added
+about 344 words of tables and buffers, which is what a reading of the diff would predict. It
+added 3,939. The rest is two libc routines and what stands behind them: `crypt(3)` brings the
+DES key schedule, and `getpass(3)` opens `/dev/tty` with `fopen()` — so one call for one line of
+input dragged in the whole of stdio, `FILE` buffers and all. **Measure the program, not the
+patch**: a shared routine's cost is what it links, not what it is.
+
+It is still the port for which §3's `%D` pass is a *no-op*, which is worth knowing before
+grepping for one.
 
 ## Two corrections to the record
 
@@ -32,7 +38,9 @@ because a README that records only its own findings leaves the wrong warning sta
 **`ed` has twenty `char *` comparisons, not the ten §2's table claimed** — the densest
 concentration in the tree, `sort.c`'s fifteen included. Dropping `-x` took two of them, so
 nineteen were rewritten. Every one is a *bound* on a buffer the regex engine or the substitute
-path is writing into, and none of them faults when it answers wrongly.
+path is writing into, and none of them faults when it answers wrongly. Task C19 brought `-x`
+back and did **not** bring the two comparisons with it: `crblock()` counts down a `nchar` and
+`getkey()` is a `strncpy`, so nineteen is still the number.
 
 **`ed` has no `CCL` bitmap.** The task brief warned that `expbuf` packs character classes "with
 `CCL` bitmap arithmetic (`1 << (c & 07)`, `c >> 3`)" and that this was the third thing that
@@ -215,6 +223,60 @@ Two findings from writing it:
   `cmd/sh/test/heredoc` covers the mechanism under `b6sim`, but the shell writes one to
   `/tmp/sh-<pid><serial>` and unlinks it at once (`cmd/sh/io.c`), which nothing had done here.
   It worked first time — worth writing down precisely because it might not have.
+
+## `-x` was deleted and task C19 put it back
+
+The C3 port dropped v7's encrypting mode whole — `getkey()`, `crinit()`, `crblock()`,
+`makekey()`, the `xflag`/`xtflag`/`kflag` state and the `x` command — on two grounds, both
+written into [ed.c](ed.c) and [ed.1.umm](ed.1.umm) at the time: `/usr/lib/makekey`, which v7's
+`ed` execs to derive a key, was not on the image and was in no task; and `crinit()`'s seed
+arithmetic wanted 32-bit wraparound this machine has not got, so the keys would not have matched
+a PDP-11's even had it run.
+
+**C19 answered both**, and the answer is [../crypt/rotor.c](../crypt/rotor.c): the key comes from
+`crypt(3)` instead of a forked program, and the arithmetic is bounded to 32 bits explicitly.
+[../crypt/README.md](../crypt/README.md) is that argument. What matters here is that `ed` and
+`crypt(1)` link **the same object file** — `../df` and `../umount` share `../mount/mtab.c` the
+same way — so `ed.1`'s and `crypt.1`'s promise that the two interoperate is a property of the
+build and not a thing two files have to be kept agreeing about.
+
+Three changes to what came back:
+
+* **`getpass(3)` replaced `getkey()`**, which is what retires the *wild `longjmp`* the C3 note
+  recorded. v7's `getkey()` calls `error("Input not tty")`, and the `-x` arm runs before
+  `main()` reaches its `setjmp(savej)`, so the jump went through an uninitialised `jmp_buf`.
+  `getpass(3)` cannot fail: it takes eight characters — every one `crinit()` reads of v7's nine
+  — and answers an empty line with an empty key, which is `ed`'s own "encrypt nothing". **The
+  rule the deletion left behind is therefore unbroken**: nothing in this program may call
+  `error()` before `main()` has reached its `setjmp`.
+* **v7's local `makekey(a, b)` is `tmpkeyinit()`.** It is the temp file's throwaway key, from
+  the clock and the pid, and it is not `/usr/lib/makekey` — which is a real program on this
+  image now, so the name had become a trap.
+* **The 0200 guess is gone**, and this is the one behavioural divergence. v7's `getfile()`
+  deciphers a block only if some byte in it has the top bit set, guessing at whether the file is
+  encrypted at all. That guess cannot survive an eight-bit-transparent editor: a Cyrillic
+  plaintext trips it and a short ciphertext may not. So `-x` means the file *is* encrypted and
+  every block is deciphered. Reading a clear file under `-x` gives nonsense rather than the file,
+  and [ed.1.umm](ed.1.umm) says so.
+
+### It has no automated test, and it cannot have one
+
+`getpass(3)` wants a terminal. Under `b6sim` there is none, and the fallback — reading standard
+input — is worse than useless as a fixture: run from a terminal, `ctest` *would* find a
+`/dev/tty` and the case would sit there waiting for someone to type. So `-x` has no
+`b6_progtest` case and belongs to no test that survives ([../README.md](../README.md) §9). It
+was checked by hand, in both directions and across a temp-file spill, against the host reference
+[../crypt/test/mkfix.c](../crypt/test/mkfix.c):
+
+```sh
+crypt hobbit <big.txt >big.c            # 18,790 bytes, 300 lines
+printf 'hobbit\nw big.p\nq\n' | ed -x big.c
+crypt hobbit <big.p | cmp - big.txt     # identical
+```
+
+The middle line is the whole of it: `ed` deciphered 300 lines with the user's rotor, spilled
+them through 37 enciphered temp-file blocks under a *different* rotor, and enciphered them back
+out — and `crypt(1)`, and the PDP-11 reference, both read the result.
 
 ## Known limits
 

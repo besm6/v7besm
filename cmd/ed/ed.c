@@ -3,7 +3,7 @@
 //
 // ed -- the editor.
 //
-//      ed [-] [-q] [file]
+//      ed [-] [-q] [-x] [file]
 //
 // Task C3 (../TODO.md), and the pivot: until this program ran, nothing on this machine
 // could AUTHOR text.  Every file on the image was written on the build host and staged in
@@ -20,7 +20,8 @@
 //     `<' between two char * did not order them (the compiler fixed that on 2026-06-17;
 //     SS2 has the account).  Every one is an int index or an int difference now, which is
 //     also the cheaper code: the relational costs two calls, an index test one compare.
-//     Two of the twenty went away with -x below, so nineteen were rewritten.
+//     Two of the twenty went away with -x below, so nineteen were rewritten -- and task
+//     C19 brought -x back without them, ../crypt/rotor.c having neither.
 //
 // 2.  THE FILE MIXES BOTH POINTER WIDTHS, FREELY, AND THAT IS THE TRAP.  zero, dot, dol,
 //     addr1, addr2, names[] and every `a1'/`a2'/`markp' over them are int * -- THIN word
@@ -31,27 +32,31 @@
 //     was wrong.  It is the pointed-to type that decides, and nothing about the shape of
 //     the loop says which you are looking at.
 //
-// 3.  -x IS GONE.  v7's encrypting mode ran the buffer and the temp file through crypt(3):
-//     getkey() read a key with ECHO off, crinit() derived a permutation from it and
-//     crblock() ran it over every block.  It execs /usr/lib/makekey, which is not on this
-//     image and is in no task, so the mode could not work; and crinit()'s seed arithmetic
-//     depended on 32-bit wraparound, so the keys it derived would not have matched a
-//     PDP-11's in any case.  Deleted whole -- getkey(), crinit(), crblock(), makekey(), the
-//     xflag/xtflag/kflag state, key[], perm[], tperm[], crbuf[], the `x' command and the
-//     last use of <sgtty.h>: 170 lines and 342 words of static data.  A deliberate
-//     divergence, so it is written down twice, here and in ed.1.umm, on touch(1)'s precedent
-//     (../README.md SS10).
+// 3.  -x WAS GONE AND IS BACK, task C19.  It was deleted here because it execs
+//     /usr/lib/makekey, which was not on the image, and because crinit()'s seed arithmetic
+//     wanted 32-bit wraparound this machine has not got.  C19 answered both:
+//     ../crypt/rotor.c is that key schedule with the wraparound emulated, THIS FILE LINKS
+//     IT, and crypt(1) links the same object -- so ed.1's and crypt.1's promise that the
+//     two interoperate is a property of the build.  ./README.md is the account.
 //
-//     It took a WILD longjmp with it, which is the part worth keeping in mind.  main() called
-//     getkey() from the -x arm, and getkey() calls error("Input not tty") -- but that arm ran
-//     BEFORE the setjmp(savej) below, so the jump went through an uninitialised jmp_buf.  The
-//     rule it leaves behind stands whatever else changes here: NOTHING IN THIS PROGRAM MAY
-//     CALL error() BEFORE main() HAS REACHED ITS setjmp.  The two places that want to
-//     complain earlier -- an over-long file name and a failed malloc -- write and exit
-//     instead, and init()'s unchecked creat/open is left unchecked for the same reason: it
-//     runs before the setjmp on the first call and from the `e' command, where error() is
-//     right, on every later one.  v7 reports that failure at the first blkio() as `?TMP',
-//     which is a real diagnostic in a reachable place, so it stands.
+//     ONE DIVERGENCE CAME BACK WITH IT, and it is item 4's doing.  v7's getfile() deciphers
+//     a block only if some byte in it has 0200 set, guessing at whether the file is
+//     encrypted at all.  On an eight-bit-transparent editor that guess is wrong both ways:
+//     a Cyrillic plaintext trips it and a short ciphertext may not.  `-x' means the file is
+//     encrypted, so it deciphers unconditionally.
+//
+//     THE WILD longjmp IT ONCE TOOK WITH IT DOES NOT COME BACK.  v7's getkey() calls
+//     error("Input not tty") from the -x arm, which runs BEFORE the setjmp(savej) below, so
+//     the jump went through an uninitialised jmp_buf.  getpass(3) is what reads the key
+//     here: it never fails, taking eight characters -- all the rotor uses -- and answering
+//     an empty line with an empty key, which is ed's own "encrypt nothing".  The rule
+//     stands whatever else changes: NOTHING IN THIS PROGRAM MAY CALL error() BEFORE main()
+//     HAS REACHED ITS setjmp.  The two places that want to complain earlier -- an over-long
+//     file name and a failed malloc -- write and exit instead, and init()'s unchecked
+//     creat/open is left unchecked for the same reason: it runs before the setjmp on the
+//     first call and from the `e' command, where error() is right, on every later one.  v7
+//     reports that failure at the first blkio() as `?TMP', which is a real diagnostic in a
+//     reachable place, so it stands.
 //
 // 4.  IT IS EIGHT-BIT TRANSPARENT, and v7's was emphatically not.  ../README.md SS11 makes
 //     that a rule of the recipe and task C11 had just done it to the shell, but the reason
@@ -73,10 +78,11 @@
 //     not mangle the text so much as silently rewrite the pattern.
 //
 // 5.  THERE IS NOT ONE FORMAT STRING IN THE PROGRAM, which makes this the first port for
-//     which SS3's %D pass is a no-op: numeric output is putd() over write(2), so ed links no
-//     stdio at all.  `long count' is one 41-bit word here, which is more range than the
-//     PDP-11's two-word long had, not less; the three lseek() casts are (off_t) now, off_t
-//     being one word too.
+//     which SS3's %D pass is a no-op: numeric output is putd() over write(2).  ed linked no
+//     stdio at all until task C19, when getpass(3) -- one call, for one line -- brought the
+//     whole of it in behind fopen("/dev/tty"); ./README.md has the arithmetic.  `long count'
+//     is one 41-bit word here, which is more range than the PDP-11's two-word long had, not
+//     less; the three lseek() casts are (off_t) now, off_t being one word too.
 //
 // THE OTHER TWO THAT WOULD HAVE BITTEN SILENTLY.  mktemp() fills the trailing `X's in the
 // buffer it is HANDED, and v7 handed it a string literal -- which lives in the read-only
@@ -105,7 +111,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
+
+#include "rotor.h"
 
 #define FNSIZE 64
 #define LBSIZE 512
@@ -158,6 +167,9 @@
 // have overflowed.  512 is 43 words and removes the regression; it is the one place the
 // encoding costs anything at all.
 #define RHSIZE LBSIZE
+
+// KSIZE was 9 and getpass(3) reads eight, which is every character crinit() looks at.
+#define KSIZE 8
 
 static char Q[] = "";
 static char T[] = "TMP";
@@ -227,6 +239,17 @@ static int wrapp;
 // nothing.
 static int nlall = 128;
 
+// -x: xflag is the mode, kflag says the key was not empty and so the buffer is enciphered,
+// xtflag says the temp file is.  The two rotors are separate keys -- the user's and a
+// throwaway from the clock -- so a temp file left behind by a crash tells nobody anything.
+static int xflag;
+static int xtflag;
+static int kflag;
+static char key[KSIZE + 1];
+static char perm[PERMSZ];
+static char tperm[PERMSZ];
+static char crbuf[512];
+
 static jmp_buf savej;
 
 static int *address(void);
@@ -250,6 +273,7 @@ static char *getblock(int atl, int iof);
 static int getchr(void);
 static int getcopy(void);
 static int getfile(void);
+static void getkey(void);
 static char *getlin(int tl);
 static int getsub(void);
 static int gettty(void);
@@ -274,6 +298,7 @@ static void setall(void);
 static void setdot(void);
 static void setnoaddr(void);
 static void substitute(int inglob);
+static void tmpkeyinit(void);
 
 int main(int argc, char **argv)
 {
@@ -301,9 +326,20 @@ int main(int argc, char **argv)
             signal(SIGQUIT, SIG_DFL);
             vflag = 1;
             break;
+
+        case 'x':
+            xflag = 1;
+            break;
         }
         argv++;
         argc--;
+    }
+
+    // Before the setjmp below, and safely so: getkey() cannot fail and crinit() cannot
+    // either.  See item 3 in the header.
+    if (xflag) {
+        getkey();
+        kflag = crinit(key, perm);
     }
 
     if (argc > 1) {
@@ -532,6 +568,17 @@ static void commands(void)
             exfile();
             if (addr1 == zero + 1 && addr2 == dol)
                 fchange = 0;
+            continue;
+
+        // Turning the mode on here leaves the temp file in clear: xtflag is init()'s and
+        // init() has run.  That is v7's, and `ed -x' is the form that protects both.
+        case 'x':
+            setnoaddr();
+            newline();
+            xflag = 1;
+            putstr("Entering encrypting mode!");
+            getkey();
+            kflag = crinit(key, perm);
             continue;
 
         case '=':
@@ -852,6 +899,10 @@ static int getfile(void)
         if (--ninbuf < 0) {
             if ((ninbuf = read(io, genbuf, LBSIZE) - 1) < 0)
                 return EOF;
+            // count is the offset of genbuf[0] in the file, which is the rotor's position.
+            // v7 deciphered only when a byte in the block had 0200 set; see item 3.
+            if (kflag)
+                crblock(perm, genbuf, ninbuf + 1, count);
             fp = genbuf;
         }
         c = *fp++;
@@ -885,6 +936,8 @@ static void putfile(void)
         lp = getlin(*a1++);
         for (;;) {
             if (--nib < 0) {
+                if (kflag)
+                    crblock(perm, genbuf, n, count - n);
                 if (write(io, genbuf, n) != n) {
                     putstr(WRERR);
                     error(Q);
@@ -899,6 +952,8 @@ static void putfile(void)
             }
         }
     } while (a1 <= addr2);
+    if (kflag)
+        crblock(perm, genbuf, n, count - n);
     if (write(io, genbuf, n) != n) {
         putstr(WRERR);
         error(Q);
@@ -1088,16 +1143,31 @@ static char *getblock(int atl, int iof)
     }
     if (bno == oblock)
         return obuff + off;
+    // The temp file's blocks are random-access, so each is enciphered from rotor position
+    // 0 rather than from its offset -- that is what the second, throwaway key is for.
     if (iof == READ) {
-        if (ichanged)
+        if (ichanged) {
+            if (xtflag)
+                crblock(tperm, ibuff, 512, (long)0);
             blkio(iblock, ibuff, WRITE);
+        }
         ichanged = 0;
         iblock   = bno;
         blkio(bno, ibuff, READ);
+        if (xtflag)
+            crblock(tperm, ibuff, 512, (long)0);
         return ibuff + off;
     }
-    if (oblock >= 0)
-        blkio(oblock, obuff, WRITE);
+    if (oblock >= 0) {
+        // obuff is the caller's live page and must come back unchanged, so the outgoing
+        // copy is enciphered somewhere else.
+        if (xtflag) {
+            memcpy(crbuf, obuff, 512);
+            crblock(tperm, crbuf, 512, (long)0);
+            blkio(oblock, crbuf, WRITE);
+        } else
+            blkio(oblock, obuff, WRITE);
+    }
     oblock = bno;
     return obuff + off;
 }
@@ -1133,7 +1203,43 @@ static void init(void)
     ichanged = 0;
     close(creat(tfname, 0600));
     tfile = open(tfname, O_RDWR);
+    if (xflag) {
+        xtflag = 1;
+        tmpkeyinit();
+    }
     dot = dol = zero;
+}
+
+// v7's own makekey(), renamed: it is not /usr/lib/makekey, which is a program on this image
+// now.  The temp file gets a key of its own, from the clock and the pid.  crinit() has
+// already scrubbed key[] by the time main() gets here, so in practice those four bytes are
+// the whole of it -- v7's arrangement exactly, and it is the unpredictability that matters.
+static void tmpkeyinit(void)
+{
+    char temp[KSIZE + 1];
+    time_t t;
+    int i;
+
+    for (i = 0; i < KSIZE; i++)
+        temp[i] = key[i];
+    temp[KSIZE] = 0;
+    time(&t);
+    t += getpid();
+    for (i = 0; i < 4; i++)
+        temp[i] ^= (t >> (8 * i)) & 0377;
+    crinit(temp, tperm);
+}
+
+// v7 turned off ECHO itself and called error("Input not tty") when there was none, from
+// before the setjmp; getpass(3) does the same work and cannot fail.  See item 3.
+static void getkey(void)
+{
+    char *p;
+
+    p = getpass("Key:");
+    strncpy(key, p, KSIZE);
+    key[KSIZE] = '\0';
+    memset(p, 0, strlen(p));
 }
 
 static void global(int k)

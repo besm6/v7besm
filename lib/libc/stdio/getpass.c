@@ -14,10 +14,11 @@
 // NOT COVERED BY lib/test/: it opens /dev/tty and would sit there waiting for someone
 // to type, which a diff-against-.expected harness cannot arrange.
 //
-// Three changes from v7: the dispositions are `void (*)(int)' per <signal.h>, the prompt
+// Four changes from v7: the dispositions are `void (*)(int)' per <signal.h>, the prompt
 // goes out through fputs() rather than fprintf(), which passed a caller's string as a
 // format -- harmless in 1979 and a hole worth closing now that stdio has a real printf
-// engine behind it -- and THE BOUND ON THE COPY IS AN INDEX.
+// engine behind it -- the stdin fallback is unbuffered too (see below), and THE BOUND ON
+// THE COPY IS AN INDEX.
 //
 // That last one was not tidying up.  v7 wrote `for (p = pbuf; ...) if (p < &pbuf[8])
 // *p++ = c;', and until the compiler's fix of 2026-06-17 `<' BETWEEN TWO char * VALUES DID
@@ -49,10 +50,14 @@ char *getpass(const char *prompt)
     static char pbuf[9];
     void (*sig)(int);
 
+    // UNBUFFERED EITHER WAY.  v7 unbuffered only /dev/tty, and the fallback to stdin then
+    // read a whole buffer to get one line -- so a caller reading its own input with
+    // read(2) found it gone.  ed -x is the case: it takes the key here and its commands
+    // with read(0), and in a shell script, where there is no /dev/tty, getpass() swallowed
+    // the script.  This routine's contract is one line, on both paths.
     if ((fi = fopen("/dev/tty", "r")) == NULL)
         fi = stdin;
-    else
-        setbuf(fi, (char *)NULL);
+    setbuf(fi, (char *)NULL);
 
     sig = signal(SIGINT, SIG_IGN);
     gtty(fileno(fi), &ttyb);

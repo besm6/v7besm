@@ -408,6 +408,17 @@ file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devi
 source ../../rootfs/bin/cp
 mode 0755
 
+file /bin/crypt         # cmd/crypt -- task C19, the one-rotor machine.  It derives its key
+                        # with libc's crypt(3) rather than by forking /usr/lib/makekey
+                        # below, which is the same thirteen bytes for one call instead of a
+                        # fork, a pipe, an exec and a wait; cmd/crypt/rotor.c is that key
+                        # schedule and cmd/ed links the same file for its -x, so the two
+                        # agree by construction.  NOT SETUID: it reads its own standard
+                        # input, and the only secret it holds is the key it destroys on
+                        # entry -- a bit here would hand that to nobody and cost something.
+source ../../rootfs/bin/crypt
+mode 0755
+
 file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT setuid, stime(2)
                         # being suser()-gated, and that is the point
 source ../../rootfs/bin/date
@@ -2414,6 +2425,17 @@ file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see
                         # file, so its storage is bounded by a constant where diff's is
                         # bounded by the input -- which is the whole reason -h exists.
 source ../../rootfs/usr/lib/diffh
+mode 0755
+
+file /usr/lib/makekey   # cmd/makekey -- task C19, and the SECOND PROGRAM ON THIS IMAGE
+                        # OUTSIDE /bin, diffh above being the first.  Ten bytes in, thirteen
+                        # out, and the transformation is crypt(3).  IT HAS NO CALLER HERE
+                        # and that is deliberate: v7's crypt(1) and ed(1) forked it because
+                        # the DES code shipped separately, and cmd/crypt/rotor.c calls
+                        # crypt(3) instead.  It is on the image as the filter makekey.8
+                        # describes, for anything a user writes.  NOT SETUID: it holds no
+                        # secret of its own.
+source ../../rootfs/usr/lib/makekey
 mode 0755
 
 file /usr/lib/units     # cmd/units's conversion table -- task C18, and the FOURTH entry in

@@ -25,6 +25,15 @@ will print the clear.
 Files encrypted by *crypt* are compatible with those treated by the editor *ed* in encryption
 mode.
 
+Note: on this system the two run **the same code** -- one key schedule and one rotor, linked
+by both programs -- so the compatibility above is a property of the build. They are also
+compatible with a real v7's: the key schedule wraps its arithmetic at 32 bits as a PDP-11
+`long' does, which a 41-bit word would not otherwise do.
+
+Note: the key is derived here by crypt(3), which is in the C library. v7's *crypt* forked
+makekey(8) for those thirteen bytes because the encryption code shipped separately; the bytes
+are the same and /usr/lib/makekey is still on this system, but nothing execs it.
+
 The security of encrypted files depends on three factors: the fundamental method must be hard
 to solve; direct search of the key space must be infeasible; `sneak paths` by which keys or
 cleartext can become visible must be minimized.
