@@ -9,7 +9,7 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
   `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
 - **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
-  plus **111 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
+  plus **112 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
   is `b6_prog()` calls under `cmd/` whose `DEST` is not `test/…`, and nothing but that rule.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
@@ -59,7 +59,7 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 140 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 98 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
 `/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14,
 `/bin/m4` 19, `/bin/make` 24, `/bin/dc` 32, `/bin/bc` 20 with one more for
@@ -69,7 +69,11 @@ until the `lib/test` programs moved to the test pack, which has 1,686 free of it
 `/bin/at` plus `/usr/lib/atrun` **28**, three of which are the `/usr/spool/at` directories,
 and `/etc/cron` plus `/usr/lib/crontab` **10**, one of which is `/etc/rc` growing a block, and
 `/bin/mail` **18**, of which the program is 16, one is the `/usr/spool/mail` directory it
-delivers into, and one is its own manual page crossing a block boundary as C28 corrected it.
+delivers into, and one is its own manual page crossing a block boundary as C28 corrected it, and
+`calendar` **42** — the largest single addition there has been, of which the two programs are 9,
+the `/usr/lib/calendars` directory 1, the manual page 1, and **29 the database**, which is data
+v7 never had and which C23 chose whole over a four-file subset because eight files cover 362 days
+of the year and four cover 114.
 **Take the number from a build** — `b6fsutil` prints it — rather than from this sentence,
 which C22 found to be one out.
 

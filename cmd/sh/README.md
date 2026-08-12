@@ -350,6 +350,20 @@ the shell.
   the one thing that differs between the two forms. Until it is understood, a script that needs
   four stages puts the first three in a pipeline of their own and reads the file back:
   `kernel/test/inspect.sh` is the worked example and says so where it does it.
+* **A `case` arm holding a `while` whose body holds a pipeline kills the shell too**, and it is
+  task **C29** in [`../TODO.md`](../TODO.md), which carries the repro. Found by task C23: v7's
+  `calendar(1)` is written that way and does not run here at all
+  ([`../calendar/README.md`](../calendar/README.md) has the bisection). **It is very probably the
+  bullet above in another suit** — the same `SIGNAL 4`, the same absence of any diagnostic, the
+  same rule that every ingredient works alone and one more level of nesting does not — and
+  whoever takes C29 should read the two together rather than treat them as separate corners. The
+  difference worth having is that this one leaves evidence: the shell's message tables and
+  variable list print to the console as text, and then a `cannot shift` arrives from a builtin
+  the script never calls, which is a corrupted data segment saying so out loud.
+
+  Neither repro can be a case in [`test/`](test/): that suite runs under `b6sim`, where no
+  external program can be `exec`'d, so **not one case in it contains a pipeline**. The syntax is
+  covered; what the syntax *runs* is not, and both of these live in the gap.
 * **`?` and `[...]` match one BYTE, not one character**, so `приве?` does not match `привет`.
   See the C11 section above; `test/utf8.sh` asserts it.
 * **`wait()`'s status comes back in r12, a 15-bit index register**, so an exit code of 128 or more

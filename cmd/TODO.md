@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C22, C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C23, C26
 and C28 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -40,16 +40,16 @@ and it leaves the program **on the image** — staged into `build/rootfs/`, name
 [../root.manifest](../root.manifest), and asserted by a test. A port is not done when it compiles.
 
 **One task is one program**, and they are ordered so that each is unblocked by the one before it.
-**C24 is the exception and says so**: eight mechanical conversions of programs that are already
-here and already tested, whose value is in doing them together rather than one at a time.
+**Neither of the two left obeys that rule and both say so**: C24 is eight mechanical conversions
+of programs that are already here and already tested, and C29 is a defect in one that is.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C23 | `calendar` | | small |
+| C29 | `sh` corrupts itself on a `case` arm holding a `while` and a pipeline | the last v7 script this tree wants to run, and confidence in every one it already runs | small |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C23.** It is unblocked — its database is in [`calendar/calendars/`](calendar/)
-— and `cron`'s crontab has a commented line waiting for it.
+**Where to start: C29.** It is small, it is reproducible in one command, and C23 found it the
+hard way — by shipping a script that had to be rewritten around it.
 
 **What the finished tasks settled has moved to [README.md](README.md)**, under "What the
 finished tasks settled" at its foot: the lessons C17 through C22 left behind, and the two loose
@@ -59,9 +59,46 @@ reference, which is the split the header above already claims.
 
 ---
 
-## C23. `calendar`
+## C29. `sh` corrupts itself on a `case` arm holding a `while` and a pipeline
 
-`calendar/calendar.c`, 54 lines. Database is available in cmd/calendar/calendars/. 
+**The one task here that is not a port**, and it is a defect in a program this tree already
+ships and already tests. C23 found it: v7's `calendar(1)` is a `case $# in 0) … *) … esac`, and
+written that way it does not run on this machine at all.
+[`calendar/README.md`](calendar/README.md) has the bisection; what is here is the part a fix
+needs.
+
+**The repro**, on the booted machine — nothing smaller has been found, and every piece of it
+works on its own:
+
+```sh
+case $# in
+*)      sed 's/:.*//' /etc/passwd |
+        while read x
+        do
+                if test -r /etc/motd
+                then    egrep a /etc/motd | cat
+                fi
+        done
+        ;;
+esac
+```
+
+`** SIGNAL 8 **`, the shell's message tables and variable list printed to the console as text,
+then `cannot shift` — from a builtin the script does not call. Take the inner `if` out and it
+**hangs** instead. Replace the `case` with `if`/`else`, changing nothing else, and it is
+correct; that is what [`calendar/calendar.sh`](calendar/calendar.sh) ships and why. Moving `;;`
+onto a line of its own changes nothing, so it is not a `fi;;` tokenising problem.
+
+**Where to look.** A corrupted data segment rather than a syntax error, and a single nesting
+level deciding it, both point at the **4,096-word stack** (§6) and the recursion `execute()`
+does over the parse tree — `case` is one `TFND` frame, and it is the frame that tips it. Measure
+before assuming: the stack cannot be checked by `rootfs_sh_size`, which sees the four segments
+and not the depth.
+
+**Why nothing caught it.** [`sh/test/`](sh/test/) runs under `b6sim`, where no external program
+can be `exec`'d, so **not one case in it contains a pipeline** — the ingredient this needs.
+`case` is covered, `while` is covered, and the combination cannot be. A fix wants an assertion
+that lives where pipelines run, which means `kernel/test/multi` (§9) and not `sh/test/`.
 
 ## C24. The eight hand-rolled directory readers, over `opendir(3)`
 

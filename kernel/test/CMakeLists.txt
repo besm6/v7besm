@@ -249,6 +249,16 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/bc
     ${B6_ROOTFS}/bin/cal
+    ${B6_ROOTFS}/usr/bin/calendar
+    ${B6_ROOTFS}/usr/lib/calendar
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.birthday
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.christian
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.computer
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.history
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.holiday
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.judaic
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.music
+    ${B6_ROOTFS}/usr/lib/calendars/calendar.usholiday
     ${B6_ROOTFS}/bin/cat
     ${B6_ROOTFS}/bin/chgrp
     ${B6_ROOTFS}/bin/chmod

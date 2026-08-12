@@ -54,7 +54,8 @@ Notes on the copies:
 * **Three programs carry a data file**: [units/units](units/units), [cron/crontab](cron/crontab)
   and [calendar/calendars/](calendar/calendars/). The first two are v7's own and are on the image
   as `/usr/lib/units` and `/usr/lib/crontab`; `calendar`'s eight files are not v7's — the
-  reference tree held an x86 binary under that name — and go on with task C23.
+  reference tree held an x86 binary under that name — and went on with task C23, as
+  `/usr/lib/calendars/*`, PLURAL because `/usr/lib/calendar` is the program.
 * The `.y`, `.l` and header-ish files carry **no v7 copyright banner**, unlike the `.c` sources.
   The top-level `COPYRIGHT` covers them; do not add one.
 
@@ -264,7 +265,7 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **140 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **98 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
 what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32, `bc` 20 with one more
 block for the `/usr/lib/lib.b` its `-l` reads, `units` 14 with three of them the
@@ -285,7 +286,14 @@ whose comment block crossed into a third block when the task explained itself th
 that indirect block again, **one for `/usr/spool/mail`** — the second time this tally has had to
 count a directory, after C21's three — and **one for its own manual page**, which crossed 3072
 bytes when the port corrected it. That last block is C22's `/etc/rc` lesson repeating: the page
-was already on the image and looked free, so the task budgeted seventeen and measured eighteen. `update` is
+was already on the image and looked free, so the task budgeted seventeen and measured eighteen.
+`calendar` is **42** (task C23), the largest single addition this tally has ever recorded and the
+only one where the program is the small part of it: 8 for `/usr/lib/calendar`, 1 for the
+`/usr/bin/calendar` script, 1 for `/usr/lib/calendars` — the third directory this tally has had to
+count — 1 more for a manual page that crossed 3072 bytes exactly as `mail`'s did one task earlier,
+and **29 for the database**, which is data v7 never had. Four of the eight files would have cost
+4 and covered 114 days of the year against 362; the whole set was chosen on that measurement and
+not on the size. `update` is
 the other end of the range and the cheapest thing here: **1 block**, 152 words, no stdio. `awk` is also the one whose *own* ceiling was never this
 number: what is left below the stack after its image is the whole of its heap
 ([awk/README.md](awk/README.md)).
@@ -504,6 +512,35 @@ The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/d
 One paragraph per finished task, newest first, kept here rather than in [TODO.md](TODO.md)
 because a work plan should shrink as it is worked and this does not. Each points at the port's
 own `README.md` for the detail; what is here is the part a *later* port needs to know.
+
+C23 put `calendar(1)` on the image — forty-two blocks, of which twenty-nine are the database —
+and finished by opening a task rather than closing one. Four things it settled
+([calendar/README.md](calendar/README.md)):
+
+* **`case` corrupts this shell when its arm holds a `while` and a pipeline**, which is C29 in
+  [TODO.md](TODO.md) and is the first defect this file has had to record in a program that was
+  already ported and already tested. What a later port needs is the second half of it: **no case
+  in [sh/test/](sh/test/) contains a pipeline**, because that suite runs under `b6sim` where
+  nothing can be `exec`'d, so the shell is covered for syntax and not for what syntax *runs*. A
+  script that misbehaves on this machine is not automatically the script's fault, and the way to
+  find out is to type its constructs one at a time at a live prompt — §9's "which world a test
+  runs in", applied to debugging rather than to testing.
+* **A shipped data file can disagree with the program that reads it, silently and by one
+  character.** v7's generator tolerated a leading zero on the day of the month and not on the
+  month, and every line of the database is `01/06`: for nine months of the year the program
+  worked, printed nothing, and was right to. Where a port brings a data file its ancestor did not
+  have, **run the program against it before believing either** — the image's own binaries under
+  `b6sim` will do it, and did.
+* **Curation is a measurement.** Four of the eight database files cover 114 days of the year and
+  all eight cover 362, at four blocks against twenty-nine. `root.manifest`'s manual-page preamble
+  has said "IT DOES NOT CURATE" since C25; this is the first time the alternative was costed
+  rather than asserted, and the number is what decided it.
+* **`kernel/test/multi` can assert what `b6sim` cannot, including for a task that is already
+  finished.** C28 left *"that a letter ever arrives"* in its "cannot say" list; four stages in
+  this task's dialogue assert it, because `calendar -` ends in `| mail $z`. A booting test's
+  stages are cheap once the dialogue exists, and the thing to look for when adding one is the
+  **echo trap** — the console echoes what is typed, so a marker must be one the typing cannot
+  produce (`CAL'OK'` typed, `CALOK` matched).
 
 C28 put `/bin/mail` on the image, eighteen blocks, and it is the first task here that began by
 **overturning a row of [TODO.md](TODO.md)'s "Not ported, and why" table** rather than by taking one

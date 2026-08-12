@@ -126,6 +126,12 @@ dir /usr/include/sys
 # is nearer than it was on a PDP-11 (cmd/diff/README.md).
 dir /usr/lib
 
+# calendar(1)'s database, task C23, and PLURAL because /usr/lib/calendar is already the
+# program that prints the pattern.  Twenty-nine blocks, the largest single body of data on
+# this image after the manual: /usr/bin/calendar greps these when the current directory has
+# no `calendar' of its own, which is the one thing it does that v7's did not.
+dir /usr/lib/calendars
+
 # look(1)'s default dictionary.  v7's /usr/dict/words is not in this tree -- the
 # reference copy under cmd/tmp/ is git-ignored -- so cmd/look/words is a small sorted
 # list written for the purpose, staged by cmd/look/CMakeLists.txt.  It is what makes the
@@ -1329,6 +1335,22 @@ file /usr/bin/manview   # cmd/manview -- task C25a, and what FORMATS the pages a
 source ../../rootfs/usr/bin/manview
 mode 0755
 
+file /usr/bin/calendar  # cmd/calendar -- task C23, the reminder service, and THE SECOND SHELL
+                        # SCRIPT ON THIS IMAGE after /usr/bin/lorder above.  Everything said
+                        # there about `#!' applies here unchanged, and this one is read back by
+                        # the shell far more often: /usr/lib/crontab runs `calendar -' at 01:20
+                        # every morning.  0755 for the same reason lorder is -- a user types it.
+                        # IT IS HALF A PROGRAM: /usr/lib/calendar below prints the egrep pattern
+                        # for today and tomorrow and this greps with it, which is v7's own
+                        # division and is why the two live in different directories.
+                        # WHAT IT NEEDS is on this image and all of it is: egrep -f (whose EOF
+                        # bug cmd/egrep fixed, so the flag works at all), sed, test, and
+                        # /bin/mail from task C28 -- without that last the `-' arm would have
+                        # nowhere to put a letter, which is what kept this task waiting.
+                        # cmd/calendar/README.md.
+source ../../rootfs/usr/bin/calendar
+mode 0755
+
 # /lib -- WHAT cc LINKS AGAINST, and exactly that, nothing more.  crt0.o and libc.a are
 # lib/libc's, built by this same tree with these same tools; libruntime.a is the external
 # c-compiler's and is the one piece of the link that cannot come from here (it holds the
@@ -1662,14 +1684,15 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  THREE OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, calendar and sa; crypt and makekey landed with task C19, update
-# with C20, at with C21, cron with C22 and mail with C28.  One of the three is a port
-# cmd/TODO.md still has open -- calendar, C23 -- and its page is already correct when it
-# lands; ac and sa are in that file's "Not ported, and why" table and will never have a
-# program, which is v7's own habit -- a manual page is where a decision about a program is
-# recorded whether or not the program exists.  mail was in that table too until C28 read the
-# preamble that says each row can be re-examined.
+# is worth less than the blocks.  TWO OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac and sa; crypt and makekey landed with task C19, update with C20, at with
+# C21, cron with C22, mail with C28 and calendar with C23.  The two that are left are in
+# cmd/TODO.md's "Not ported, and why" table and will never have a program, which is v7's own
+# habit -- a manual page is where a decision about a program is recorded whether or not the
+# program exists.  mail was in that table too until C28 read the preamble that says each row
+# can be re-examined.  THE CLAIM THAT A PAGE IS ALREADY CORRECT WHEN THE PROGRAM LANDS DID NOT
+# SURVIVE: calendar.1 needed three corrections when C23 arrived, the database it now falls
+# back to being something v7 had not got.
 #
 # WHAT READS THEM is /usr/bin/man below, which finds the file, and /usr/bin/manview beside
 # it, which formats what man found.  THEY ARE STAGED AS SOURCES AND NOT PREFORMATTED, which is
@@ -2533,15 +2556,28 @@ file /usr/lib/makekey   # cmd/makekey -- task C19, and the SECOND PROGRAM ON THI
 source ../../rootfs/usr/lib/makekey
 mode 0755
 
+file /usr/lib/calendar  # cmd/calendar -- task C23, and the other half of /usr/bin/calendar
+                        # above.  It prints nothing but an egrep -f pattern: today's date and
+                        # tomorrow's, in every spelling v7 recognised, and on a Friday it
+                        # reaches through to Monday.  /usr/lib because a user never runs it.
+                        # ITS PATTERN IS NOT v7's, by one character: v7 wrote `%d/' for the
+                        # month and `0*%d' for the day, so 01/06 matched nothing in January
+                        # while 10/18 matched in October -- and every line of the database
+                        # below is zero-padded.  cmd/calendar/README.md.
+                        # NOT SETUID: it reads the clock and writes standard output.
+source ../../rootfs/usr/lib/calendar
+mode 0755
+
 file /usr/lib/crontab   # cmd/cron's schedule -- task C22, and the FIFTH entry in /usr/lib
                         # that is not a program: data read by /etc/cron above, hence 0644.
                         # 0644 AND ROOT'S IS THE WHOLE SECURITY ARGUMENT for cron running as
                         # root: nobody but root can put a command in this file.  v7's three
-                        # lines, TWO OF THEM COMMENTED OUT -- dmesg wants a /usr/adm this image
-                        # deliberately has not got, and calendar(1) is task C23 -- so the
-                        # live line is the one that collects at(1) jobs every five minutes.  A
-                        # line cron cannot parse is dropped in silence, which is what makes a
-                        # `#' comment work.  Same bytes as cmd/cron/crontab.
+                        # lines, ONE OF THEM COMMENTED OUT -- dmesg wants a /usr/adm this image
+                        # deliberately has not got -- so at(1) jobs are collected every five
+                        # minutes and `calendar -' runs at 01:20, the second line having gone
+                        # live with task C23.  A line cron cannot parse is dropped in silence,
+                        # which is what makes a `#' comment work.  Same bytes as
+                        # cmd/cron/crontab.
 source ../../rootfs/usr/lib/crontab
 mode 0644
 
@@ -2590,6 +2626,47 @@ file /usr/lib/lex/ncform # cmd/lex's scanner skeleton -- task C10d, and the SECO
                         # lex.yy.c' is the whole recipe and there is no libl.a here.
                         # Same bytes as cmd/lex/ncform.
 source ../../rootfs/usr/lib/lex/ncform
+mode 0644
+
+# calendar(1)'s DATABASE, task C23, in the /usr/lib/calendars directory declared at the top of
+# this file: eight files and twenty-nine blocks, which is the largest single body of data on the
+# image after the manual and was decided by MEASUREMENT rather than by taste.  A subset of four
+# holds entries for 114 days of the year and all eight for 362, and /usr/bin/calendar falls back
+# to these when the current directory has no `calendar' -- so a subset would have left the
+# fallback silent two days in three.  0644, and v7's successors' text unaltered: every line is
+# `MM/DD<tab>text' with the month zero-padded, which is what /usr/lib/calendar's one deviation
+# from v7 is for.  cmd/calendar/README.md.
+
+file /usr/lib/calendars/calendar.birthday
+source ../../rootfs/usr/lib/calendars/calendar.birthday
+mode 0644
+
+file /usr/lib/calendars/calendar.christian
+source ../../rootfs/usr/lib/calendars/calendar.christian
+mode 0644
+
+file /usr/lib/calendars/calendar.computer
+source ../../rootfs/usr/lib/calendars/calendar.computer
+mode 0644
+
+file /usr/lib/calendars/calendar.history
+source ../../rootfs/usr/lib/calendars/calendar.history
+mode 0644
+
+file /usr/lib/calendars/calendar.holiday
+source ../../rootfs/usr/lib/calendars/calendar.holiday
+mode 0644
+
+file /usr/lib/calendars/calendar.judaic
+source ../../rootfs/usr/lib/calendars/calendar.judaic
+mode 0644
+
+file /usr/lib/calendars/calendar.music
+source ../../rootfs/usr/lib/calendars/calendar.music
+mode 0644
+
+file /usr/lib/calendars/calendar.usholiday
+source ../../rootfs/usr/lib/calendars/calendar.usholiday
 mode 0644
 
 file /usr/dict/words     # cmd/look -- task C5b.  Sorted in BYTE order, which is the order look

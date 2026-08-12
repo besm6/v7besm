@@ -14,17 +14,27 @@ calendar - reminder service
 
 *Calendar* consults the file `calendar` in the current directory and prints out lines that
 contain today's or tomorrow's date anywhere in the line. Most reasonable month-day dates such
-as `Dec. 7,` `december 7,` `12/7,` etc., are recognized, but not `7 December` or `7/12`. On
-weekends `tomorrow` extends through Monday.
+as `Dec. 7,` `december 7,` `12/7,` `12/07,` etc., are recognized, but not `7 December` or
+`7/12`. On weekends `tomorrow` extends through Monday.
+
+Note: a leading zero on the month — `01/06` — is recognized here and was not in v7, whose
+pattern allowed one on the day alone. Every file in `/usr/lib/calendars` is written that way.
+
+Note: when the current directory has no readable `calendar`, this version reads the system
+files in `/usr/lib/calendars` instead, so that a bare *calendar* prints something on a machine
+where nobody has written one. v7 printed nothing. The system files are never consulted for the
+argument form below: a user is sent his own reminders or none.
 
 When an argument is present, *calendar* does its job for every user who has a file `calendar`
 in his login directory and sends him any positive results by mail(1). Normally this is done
-daily in the wee hours under control of cron(8).
+daily in the wee hours under control of cron(8), and `/usr/lib/crontab` on this system carries
+that line.
 
 ## FILES
 
 | calendar
 | /usr/lib/calendar to figure out today's and tomorrow's dates
+| /usr/lib/calendars the system database, read when there is no `calendar` here
 | /etc/passwd
 | /tmp/cal\*
 | egrep, sed, mail subprocesses

@@ -9,7 +9,7 @@
 # write this file.  It is also what lets the live line work at all: /usr/lib/atrun needs
 # suser() for the setuid(2) that gives a job its submitter's identity.
 #
-# v7 HAD THREE LINES AND TWO ARE COMMENTED OUT:
+# v7 HAD THREE LINES AND ONE IS COMMENTED OUT:
 #
 #   dmesg wants a /usr/adm that root.manifest deliberately has not got -- the same
 #   directory process accounting was refused for in cmd/TODO.md.  Note also that v7's
@@ -17,8 +17,12 @@
 #   its `-' flag is gone with the /usr/adm/msgbuf machinery, cmd/dmesg being main(void).
 #   So the line to restore is `/bin/dmesg >>/usr/adm/messages', not v7's.
 #
-#   calendar is task C23 and is not ported yet.
+# THE CALENDAR LINE IS LIVE AS OF TASK C23, and what unblocked it was task C28 rather
+# than C23 itself: `calendar -' mails each user his own reminders, and until /bin/mail
+# existed there was nowhere for the letter to go.  It reads $HOME/calendar for every
+# line of /etc/passwd and mails nobody who has not written one, so on this image it is
+# silent until somebody does.  cmd/calendar/README.md.
 
 #0,10,20,30,40,50	*	*	*	*	/bin/dmesg >>/usr/adm/messages
 0,5,10,15,20,25,30,35,40,45,50,55	*	*	*	*	/usr/lib/atrun
-#20	1	*	*	*	/usr/bin/calendar -
+20	1	*	*	*	/usr/bin/calendar -
