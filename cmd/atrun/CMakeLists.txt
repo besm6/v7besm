@@ -1,8 +1,8 @@
 # /usr/lib/atrun -- Unix v7 atrun.  Task C21 (../TODO.md); ../at/README.md is the account,
 # and at.1 is where this program is documented -- it has no page of its own.
 #
-# /usr/lib because at.1 says so: it is not a command a user types.  It has no periodic caller
-# on this image until cron arrives (task C22), so today it is run by hand.
+# /usr/lib because at.1 says so: it is not a command a user types.  Its periodic caller is
+# /etc/cron, which arrived with task C22 and runs it every five minutes.
 #
 # NO test/ HERE (../README.md §9): it reads a DIRECTORY, which b6sim cannot, and every path
 # it names is the image's -- under the simulator /usr/spool/at would be the build machine's.

@@ -157,18 +157,22 @@ permission on the directory rather than on the file.
 and **no program in v7 or here ever opens it for reading**. It is kept because the page
 describes it; it is recorded here so that nobody goes looking for the consumer.
 
-## Nothing runs `atrun` yet
+## What runs `atrun`, and what it cost `cron` to be allowed to
 
 `at.1` says jobs are run "by periodic execution of the command `/usr/lib/atrun` from cron(8)",
-and there is no `cron` on this image — it is task **C22**. So `at` spools correctly and
-nothing collects, until somebody types `/usr/lib/atrun` as root. That is honest rather than
-broken, and it is the shape the manual page now carries a `Note:` about.
+and for one task that was a promise nothing kept: C21 landed with no `cron` on the image, so
+`at` spooled correctly and nothing collected until somebody typed `/usr/lib/atrun` as root.
+**Task C22 closed it**, and the crontab line `0,5,10,… /usr/lib/atrun` is what the granularity
+sentence in the page now refers to.
 
-**One thing C22 has to resolve before it can add the line**, and it is v7's own contradiction
-rather than anything this port introduced: [`../cron/cron.c`](../cron/cron.c) does `setuid(1)`
-in `main`, so a `cron`-forked `atrun` runs as uid 1 — and `atrun`'s `setuid(stbuf.st_uid)` is
-gated on `suser()`. As the two stand, a job scheduled by `at` and collected by `cron` could not
-be given its owner's identity at all. `../TODO.md`'s C22 section carries the note.
+It was not free, and the bill was v7's own contradiction rather than anything either port
+introduced: [`../cron/cron.c`](../cron/cron.c) called `setuid(1)` in `main`, so a `cron`-forked
+`atrun` would run as uid 1 — and `atrun`'s `setuid(stbuf.st_uid)` is gated on `suser()`. As the
+two stood, a job scheduled by `at` and collected by `cron` could not be given its owner's
+identity at all. **C22 resolved it on this side of the pair**: `cron` does not drop privilege
+here, because the crontab it reads is root's and 0644 and so grants nothing by being obeyed
+([`../cron/README.md`](../cron/README.md)). The setuid bit this file refuses just above stays
+refused, which was the point of asking.
 
 ## The assertion
 

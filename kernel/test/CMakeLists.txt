@@ -233,6 +233,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/umount
     ${B6_ROOTFS}/etc/update
+    ${B6_ROOTFS}/etc/cron
     ${B6_ROOTFS}/etc/wall
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
@@ -268,6 +269,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/lib/makekey
     ${B6_ROOTFS}/usr/lib/lib.b
     ${B6_ROOTFS}/usr/lib/units
+    ${B6_ROOTFS}/usr/lib/crontab
     ${B6_ROOTFS}/usr/lib/yaccpar
     ${B6_ROOTFS}/usr/lib/lex/ncform
     ${B6_ROOTFS}/usr/bin/cpp

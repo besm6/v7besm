@@ -51,9 +51,10 @@ Notes on the copies:
   headers rather than a program. Five of them are nothing but `.so /usr/include/…`, and there is no
   `/usr/include` here: write the structure out, as [../lib/libc/man/](../lib/libc/man/) did, with
   this machine's `DIRSIZ` 18 and one-word `off_t`/`time_t`.
-* **Two data files** came with their programs: [units/units](units/units) and
-  [cron/crontab](cron/crontab). `calendar`'s database is missing — what the reference tree holds
-  under that name is an x86 binary.
+* **Three programs carry a data file**: [units/units](units/units), [cron/crontab](cron/crontab)
+  and [calendar/calendars/](calendar/calendars/). The first two are v7's own and are on the image
+  as `/usr/lib/units` and `/usr/lib/crontab`; `calendar`'s eight files are not v7's — the
+  reference tree held an x86 binary under that name — and go on with task C23.
 * The `.y`, `.l` and header-ish files carry **no v7 copyright banner**, unlike the `.c` sources.
   The top-level `COPYRIGHT` covers them; do not add one.
 
@@ -263,7 +264,7 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **169 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **158 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
 what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32, `bc` 20 with one more
 block for the `/usr/lib/lib.b` its `-l` reads, `units` 14 with three of them the
@@ -277,15 +278,20 @@ read that is `b6size` on the other program, not on the new one. `at` and `atrun`
 between them (task C21): 12 and 13, each one block past the six direct addresses an inode holds
 and so paying an indirect block as well, and **three of those blocks are directories** —
 `/usr/spool`, `/usr/spool/at` and its `past` — which is the first time this tally has had to
-count any. `update` is the other end of the
-range and the cheapest thing here: **1 block**, 152 words, no stdio. `awk` is also the one whose *own* ceiling was never this
+count any. `cron` is **10** (task C22): 8 for the program, one of them the same indirect block,
+1 for `/usr/lib/crontab`, and **1 for a file that is not the program's at all** — `/etc/rc`,
+whose comment block crossed into a third block when the task explained itself there. `update` is
+the other end of the range and the cheapest thing here: **1 block**, 152 words, no stdio. `awk` is also the one whose *own* ceiling was never this
 number: what is left below the stack after its image is the whole of its heap
 ([awk/README.md](awk/README.md)).
 The whole of `/usr/man` is 302 blocks, `man` 12 and
 `manview` 17. That is room for a
 good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large
 addition against it rather than assuming. The number is printed by `b6fsutil` every time
-`root.img` is built, so it is measured and not estimated.
+`root.img` is built, so it is measured and not estimated — **and the running total above is the
+one that drifts**: task C22 measured the pre-C22 image at 168 where this line had said 169, an
+edit to some staged file having crossed a block boundary without anyone re-reading the count.
+Take the number from a build, not from this paragraph.
 
 ### 8. Setuid works, and it is asserted
 
@@ -485,3 +491,198 @@ The rule applies to test scripts as much as to C, which is why `b6fsutil -D`'s d
 
 The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/dev/rmd1` and
 `/dev/rmb0` (`cdevsw[3]` and `[4]`), and the block nodes `/dev/md0`, `/dev/md1` and `/dev/md2`.
+
+---
+
+## What the finished tasks settled
+
+One paragraph per finished task, newest first, kept here rather than in [TODO.md](TODO.md)
+because a work plan should shrink as it is worked and this does not. Each points at the port's
+own `README.md` for the detail; what is here is the part a *later* port needs to know.
+
+C22 put `/etc/cron` and `/usr/lib/crontab` on the image, ten blocks between them, and with it
+**the second daemon this port has had** and the periodic caller `at(1)` has claimed since C21.
+Four things it settled ([cron/README.md](cron/README.md)):
+
+* **The `setuid(1)` question, which was the task's first.** v7's `cron` drops to uid 1 and
+  `atrun`'s `setuid(2)` needs `suser()`, so the two did not compose and the crontab line that
+  runs `atrun` was exactly the composition. The call is **gone**, and the argument is that the
+  privilege which matters is not `cron`'s but **who may write the crontab**: `/usr/lib/crontab`
+  is 0644 and root's, so running root's own commands as root grants nobody anything, and uid 1
+  on this image is an account with an unmatchable hash and not one file to its name. The setuid
+  bit on `atrun` stays refused, which was the point of asking.
+* **v7's `init()` was broken three ways, and the third one bites.** Its bound test runs once per
+  line and its stores do not, so a record past a hundred bytes — an ordinary command with
+  arguments — writes through the end of a `malloc`'d block; and it twice does `free(p)` followed
+  by `realloc(p, …)`, recovering the cursor by differencing the pointer it just freed. The
+  rewrite is one idea: **the cursor becomes an offset and every byte goes in through one
+  bounds-checking `put()`**. §2 says an index buys nothing on this machine and that is true and
+  beside the point — **an offset survives a `realloc` and a pointer does not.** Note what it
+  also taught about this allocator: `realloc(NULL, n)` is `malloc(n)`, and a `realloc` that
+  **fails has already freed the old block**, so the pointer must be nulled with it.
+* **A daemon that forks other programs cannot leave 0, 1 and 2 closed**, which is where
+  [update/README.md](update/README.md)'s precedent stops applying: a job inheriting a free
+  descriptor gets it back from its own first `open(2)`, and its data file becomes somebody's
+  standard output. `/dev/null` on all three, as `atrun` already did. v7's `freopen("/", …)`
+  before each `exec` reads like a program giving its job a standard input and is not — it is
+  plugging the hole its own `fclose(stdin)` opened.
+* **A program with no diagnostic path is a program whose failures are control flow.** Descriptor
+  2 is the bit bucket by construction, so `init()` grew a return value, `put()` a sticky flag,
+  and `main` a rule about never walking a list a failed compile may have freed. Worth carrying
+  to the next daemon.
+
+The assertion is `kernel/test/multi` stage 12b, C20's `ps -ax` stage in a new suit and typed one
+letter short for the same reason, and **checked by deleting the `/etc/rc` line and watching
+`multi` fail** — which is also where it was rediscovered that a plain `make` does not rebuild
+`root.img`, so the first attempt at that check passed against a stale image and proved nothing.
+`make test` first, every time.
+
+**What the stage does not say is that `cron` ever runs anything**, and the reason is a fact
+about this harness worth carrying: the whole `multi` dialogue takes about **five seconds of wall
+clock**, and the guest clock is *calibrated* to the host's rather than fast, so five seconds of
+wall clock is five seconds of guest time. Waiting for a five-minute crontab boundary would turn
+a five-second test into a five-minute one. **So the whole chain was run once by hand instead**,
+and the trick that made that cheap is worth stealing: type a date whose minute is **04**, so the
+next boundary the crontab names is under a minute off rather than up to five.
+[cron/README.md](cron/README.md) has the four lines and what came out. The same schedule puts a
+small race into stages 13 to 17, where a scheduled `atrun` can collect the `at` job the dialogue
+meant to collect itself; `multi.ini` says so beside them.
+
+C21 put `/bin/at` and `/usr/lib/atrun` on the image, 28 blocks between them, and what it
+retired was **a blocker that was never there**. Three tasks stood behind "a clock this machine
+has not got", and two-thirds of that sentence was wrong
+([at/README.md](at/README.md)):
+
+* **Elapsed time always worked.** The interval timer is what is *supposed* to advance the
+  clock: it free-runs at `HZ` 250, SIMH calibrates it against the host's wall clock, and
+  `kernel/clock.c` has incremented `time` every 250th tick since the port existed, with
+  `kernel/test/uclock` asserting it. Only the **epoch** was a build constant.
+* **The epoch was always settable**, by `date yymmddhhmm` → `stime(2)` → `suser()`. What was
+  missing was not a mechanism but an **operator** — and v7's answer on a machine with no
+  battery clock is that somebody types the date in single-user mode. So the answer was a
+  fifteen-line SIMH script, [../kernel/date.ini](../kernel/date.ini), and not the kernel task
+  nobody had written. **C22 and C23 were unblocked by that finding and not by their own work.**
+
+The rule to carry is the shape of the mistake rather than the clock: **a blocker that names a
+mechanism should be checked against the mechanism before it is inherited.** This one had been
+copied into `cmd/TODO.md`, `etc/rc` and `kernel/test/CMakeLists.txt`, and three tasks waited on
+it.
+
+The port itself turned on one line. v7 names each spool file with `%02d` of `tm_year`, which is
+**126** in 2026 and three characters, and `atrun` reads it back with `%2d` — so it takes `12`,
+demands a `.`, finds `6`, and `continue`s. **Every job would have been skipped in silence**, no
+diagnostic and nothing to look at but a file that never went away. Both formats carry the full
+year now, `date(1)`'s own widened-year fix being the precedent, and `kernel/test/multi` matches
+the four digits back out of the spool. That stage was checked by narrowing `atrun`'s `sscanf`
+again and watching `multi` fail.
+
+Two more things it settled, both about a directory nobody had needed before:
+
+* **A 0777 spool plus "run this as its owner" is a hole**, not a wart. `link(2)` needs no
+  permission on the source and carries the owner along, so any user could hard-link a
+  root-owned file into `/usr/spool/at` and have `atrun` `setuid(0)` and hand it to `/bin/sh`.
+  A job `at` created has exactly one link, so anything with more is refused.
+* **A new port uses `opendir(3)`**, §5's instruction, and `atrun` is the first taker.
+  `%.14s` — v7's `DIRSIZ` written into a `sprintf` — went with the `/bin/mv` fork it was
+  formatting for; the move to `past/` is `link()` plus `unlink()`.
+
+C20 put `/etc/update` on the image, one block and 152 words, and with it **the first daemon this
+port has had** — the first program that outlives the shell that started it. What it settled was
+not the port, which is a `sync()` in a loop, but the two claims that had kept the line out of
+[../etc/rc](../etc/rc), and **both were wrong**
+([update/README.md](update/README.md)):
+
+* **A daemon in a script `init` re-runs does not accumulate.** `/etc/rc` really does run on every
+  pass through init's loop — but `shutdown()` runs *first* on every pass, and `kill(-1, SIGKILL)`
+  from root spares only `proc[0]` and `proc[1]`, so the previous copy is dead and reaped before
+  the line is read again. The rule to carry: **read `shutdown()` before believing a claim about
+  what survives a pass**.
+* **`/etc/rc` has an assertion home again, and had one all along.** `kernel/test/console` was
+  deleted, but `kernel/test/multi` types the same `^D`, runs the same script, and had been
+  matching the `date` line for some time unnoticed. It now asks `ps -ax` for the daemon as well.
+  **That reopens the two lines deferred for want of an assertion** — the boot-time `fsck` and
+  `rm -f /tmp/*` — which wait on nothing now but somebody willing to write the stage.
+
+The lesson worth carrying out of the *test*, and it cost a rewrite: **an expect string can be
+satisfied by the shell's own echo**. `ps -ax | grep update` puts the word `update` into the console
+stream before `grep` runs, so with no daemon at all the prompt follows the echo and the rule
+matches — a green test asserting nothing. The pattern is typed one letter short for that reason,
+and the stage was checked by deleting the `/etc/rc` line and watching `multi` fail.
+
+The one true cost is a state transition rather than a leak: a permanent child means
+`multiple()`'s `wait() == -1` never comes back, so init's `allgone` return to single-user and
+`merge()`'s two `/etc/ttys` diagnostics are set and never said. That is v7's own arithmetic —
+v7's `rc` started `update` and `cron` on the same reasoning — and it is written down in
+`multiple()` rather than fixed.
+
+C19 put `/bin/crypt` and `/usr/lib/makekey` on the image, and what it
+settled was larger than two small programs. **A key schedule that overflows is not a key
+schedule here**: v7's `crypt` derives its rotor through a `long` that wraps at 32 bits, and
+`b$mul` on this machine keeps the HIGH bits of an overflowing product, so the arithmetic had to
+be bounded to 32 bits explicitly — after which this `crypt` is bit-compatible with a PDP-11's
+and the files interchange ([crypt/README.md](crypt/README.md)). It also **retired a premise**:
+`ed` had dropped `-x` on the grounds that `makekey` would never exist and the seed arithmetic
+could not be reproduced, and both were answered, so `-x` is back over the same `rotor.c` that
+`crypt` links — one implementation, so the two manual pages' promise that they interoperate is
+a property of the build. The cost is the lesson worth carrying: **a shared object can cost more
+than it looks**, `ed` growing five blocks because `getpass(3)` brings stdio with it.
+
+C18 put `/bin/units` on the image and, with it, the first floating-point
+program this port has had — which is how it was discovered that **an arithmetic fault stopped the
+machine**: `kernel/trap.c` decoded five ГРП causes and neither of the two arithmetic ones, so a
+floating overflow or divide by zero in any user program reached `panic("trap")`. It decodes seven
+now, both new ones as `SIGFPE`, asserted by `kernel/test/ufpe` — the only forge test that links
+the real `trap.c` rather than a copy of it. **The rule that came out of it, and that every future
+port doing arithmetic inherits**: an overflow here is a fault and not a signal, so a range gate
+goes *before* the operation ([units/README.md](units/README.md),
+[../lib/libm/README.md](../lib/libm/README.md)). Underflow is a silent zero and raises nothing.
+
+**Every grammar is done**, too: C17 put `/bin/awk` on the image, the one
+program that is a yacc grammar *and* a lex scanner, and with it C10 is spent to the last risk.
+`b6yacc` and `b6lex` are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on
+the image with their skeletons (C10c, C10d). **C11, C26, C13, C14, C16 and C17 proved it** —
+`expr`, `egrep`, `m4`, `make`, `bc` and `awk` are on the image, built from their grammars by
+`b6_yacc()`, and the skeleton needed no change for any of them. Five things they settled, in
+order:
+
+* **A non-zero conflict count is not by itself a sign of trouble** (C26): `egrep.y` has two
+  shift/reduce conflicts, both v7's own, both on the `error` token and both resolved by shifting
+  ([egrep/README.md](egrep/README.md)). What matters is that the number does not move.
+* **A grammar plus a hand-written translation unit in one `b6_prog()`** works (C13), needs no
+  `-I` when the C file names no token, and wants `b6nm` over the result to check that each shared
+  global is defined once ([m4/CMakeLists.txt](m4/CMakeLists.txt)). C14 is the same shape with six
+  C files instead of one, and it does want an `-I` — on its own directory, the generated parser
+  being compiled somewhere else and including the program's header.
+* **A conflict count in the dozens is still only a number to hold still** (C16): `bc.y` reports
+  12 shift/reduce and 30 reduce/reduce, `stat` and `e` both deriving `LETTER '=' e`, and running
+  `b6yacc` over the unmodified upstream grammar gives the same two numbers
+  ([bc/README.md](bc/README.md)).
+* **`%union` works** (C14). It was the last of C10's risks: a union `YYSTYPE` turns the
+  skeleton's three value copies into aggregate copies, and nothing had ever compiled one. It was
+  retired ahead of the port on [yacc/rootfs/calcu.y](yacc/rootfs/calcu.y) rather than inside it,
+  so that a miscompile could not read as a grammar bug, and it passed first time
+  ([yacc/README.md](yacc/README.md) under "The contract").
+* **A grammar and a scanner in one `b6_prog()`** (C17), which is all C10 ever had left to
+  prove. Two `-I`s, in opposite directions: the source directory, because the generated
+  parser and scanner include the program's own header, and `${<var>_DIR}`, because the
+  hand-written units include the `y.tab.h` `b6_yacc()` leaves beside the parser -- and that
+  generated header must be named in `KHDRS` or the units compile before `b6yacc` has run.
+  `#define YYSTYPE` wants a **typedef** behind it, since yacc writes `YYSTYPE yylval, yyval;`
+  and the second declarator of a pointer `#define` is not a pointer
+  ([awk/README.md](awk/README.md)).
+
+**Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
+is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
+`TTYHOG/2` and `canon()` sends the start character back — and **no program on this image can set
+it**, the cut in [stty/README.md](stty/README.md) being deliberately subtractive.
+`TIOCEXCL`/`TIOCNXCL` and `TIOCHPCL` are the other shape: `ttioccomm()` accepts all three and sets
+`XCLUDE` or `HUPCLS`, and **nothing in the kernel ever tests either bit**, so an exclusive-open
+request and a hang-up-on-last-close request are both silently ignored. Both are worth knowing
+before somebody reports them as bugs.
+
+**[../etc/rc](../etc/rc) still wants two lines, and neither waits on a program any more** — C22
+took the last one that did. A boot-time `fsck` and the `rm -f /tmp/*` line wait on nothing but an
+assertion, and **that excuse expired with C20**: `kernel/test/multi` runs the script and asserts
+three of its lines already, so a fourth and a fifth are a stage each in `multi.ini`. Whoever
+writes them should read what C20 learned about an expect string an echo can satisfy, and note
+that a `fsck` which repairs the mounted root does not return.

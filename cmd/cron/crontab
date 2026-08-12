@@ -1,3 +1,24 @@
-0,10,20,30,40,50 * *	*	*	/etc/dmesg - >>/usr/adm/messages
+# /usr/lib/crontab -- what /etc/cron runs, and when.  Task C22; cmd/cron/README.md.
+#
+# Fields are minute, hour, day of month, month, day of week (0-6, SUNDAY IS 0 -- cron.8
+# said 1-7 with 1=monday and was wrong about v7's own code), then the command.  A line
+# cron cannot parse is dropped in silence, and that is what makes a `#' comment work.
+#
+# 0644 AND ROOT'S IS PART OF THE DESIGN: cron does not setuid(1) here, so every command
+# below runs as root -- which gives nothing away precisely because nobody but root can
+# write this file.  It is also what lets the live line work at all: /usr/lib/atrun needs
+# suser() for the setuid(2) that gives a job its submitter's identity.
+#
+# v7 HAD THREE LINES AND TWO ARE COMMENTED OUT:
+#
+#   dmesg wants a /usr/adm that root.manifest deliberately has not got -- the same
+#   directory process accounting was refused for in cmd/TODO.md.  Note also that v7's
+#   form is wrong here twice more: this image keeps the program in /bin (task C8), and
+#   its `-' flag is gone with the /usr/adm/msgbuf machinery, cmd/dmesg being main(void).
+#   So the line to restore is `/bin/dmesg >>/usr/adm/messages', not v7's.
+#
+#   calendar is task C23 and is not ported yet.
+
+#0,10,20,30,40,50	*	*	*	*	/bin/dmesg >>/usr/adm/messages
 0,5,10,15,20,25,30,35,40,45,50,55	*	*	*	*	/usr/lib/atrun
-20	1	*	*	*	/usr/bin/calendar -
+#20	1	*	*	*	/usr/bin/calendar -

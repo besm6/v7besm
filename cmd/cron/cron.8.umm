@@ -20,16 +20,39 @@ by running *cron* from the initialization process through the file /etc/rc; see 
 
 Crontab consists of lines of six fields each. The fields are separated by spaces or tabs. The
 first five are integer patterns to specify the minute (0-59), hour (0-23), day of the month
-(1-31), month of the year (1-12), and day of the week (1-7 with 1=monday). Each of these
+(1-31), month of the year (1-12), and day of the week (0-6 with 0=Sunday). Each of these
 patterns may contain a number in the range above; two numbers separated by a minus meaning a
 range inclusive; a list of numbers separated by commas meaning any of the numbers; or an
 asterisk meaning all legal values. The sixth field is a string that is executed by the Shell at
-the specified times. A percent character in this field is translated to a new-line character.
-Only the first line (up to a % or end of line) of the command field is executed by the Shell.
-The other lines are made available to the command as standard input.
+the specified times. A percent character in this field is translated to a new-line character,
+and the whole string, newlines and all, is given to the Shell — so every line of it is executed.
 
-Crontab is examined by *cron* every minute.
+Note: v7's page said the day of the week is "1-7 with 1=monday" and that only the first line of
+the command field is executed by the Shell, the rest being made available to the command as
+standard input. Both were wrong about v7's own program, and neither has been made true here. The
+day of the week is compared against the field ctime(3) fills in, which counts 0 through 6 from
+Sunday; and there is no pipe anywhere in *cron* — the standard input of a job is /dev/null.
+
+A line that cannot be parsed is ignored without a diagnostic, which is also how a comment
+works: a line whose first non-blank character is `#` is skipped. A last line with no terminating
+newline is dropped.
+
+Crontab is examined by *cron* every minute, and re-read whenever its modification time has
+changed.
+
+Note: commands run as the super-user. v7's *cron* did setuid(1) before forking anything, which
+on this system cannot work: the one command /usr/lib/crontab actually runs is /usr/lib/atrun,
+and atrun needs the privilege of setuid(2) to give each at(1) job the identity of whoever
+submitted it. Since /usr/lib/crontab is mode 0644 and owned by the super-user, nobody but the
+super-user can put a command there in the first place. See at(1).
+
+Note: a job's standard output and standard error are /dev/null. Anything to be seen must be
+redirected by the command itself — to /dev/console, for instance.
 
 ## FILES
 
-/usr/lib/crontab
+/usr/lib/crontab, mode 0644 and owned by the super-user
+
+## SEE ALSO
+
+at(1), init(8), sh(1)

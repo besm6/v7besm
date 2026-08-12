@@ -334,6 +334,22 @@ file /etc/update        # cmd/update -- task C20.  The other half of /bin/sync: 
 source ../../rootfs/etc/update
 mode 0755
 
+# THE SECOND DAEMON, task C22, and the line that finishes /etc/rc's list of programs to wait
+# for.  It wakes every minute, re-reads /usr/lib/crontab below whenever that file's mtime has
+# moved, and hands each command whose five time fields match to /bin/sh.  It is safe in a
+# re-run script for the reason /etc/update above is, and kernel/test/multi asks `ps -ax' for
+# it the same way.
+#
+# IT DOES NOT setuid(1) AND v7's DID: the only live line of the crontab runs /usr/lib/atrun,
+# which needs suser() for the setuid(2) that gives a job its submitter's identity, so a cron
+# at uid 1 could not compose with it at all.  Running root's own commands as root gives away
+# nothing -- the crontab is 0644 and root's, so only root can put a command in it.  A setuid
+# bit on atrun remains refused; cmd/cron/README.md and cmd/at/README.md.
+file /etc/cron          # cmd/cron -- task C22.  The clock daemon: at(1) jobs are collected
+                        # every five minutes without anybody typing anything
+source ../../rootfs/etc/cron
+mode 0755
+
 # /etc/mtab IS NOT HERE, and that is the design rather than an omission: the first mount of a
 # boot creates it (cmd/mount/mtab.c), a missing one reads as an empty table, and an image
 # that shipped one would be shipping a claim about what is mounted that no boot had made.
@@ -1619,12 +1635,13 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  SIX OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, at, calendar, cron, mail and sa; crypt and makekey landed with task C19
-# and update with C20.  Three are ports cmd/TODO.md still has open and their pages are
-# already correct when one lands; mail, ac and sa are in that file's "Not ported, and why"
-# table and will never have a program, which is v7's own habit -- a manual page is where a
-# decision about a program is recorded whether or not the program exists.
+# is worth less than the blocks.  FOUR OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac, calendar, mail and sa; crypt and makekey landed with task C19, update
+# with C20, at with C21 and cron with C22.  One of the four is a port cmd/TODO.md still has
+# open -- calendar, C23 -- and its page is already correct when it lands; mail, ac and sa are
+# in that file's "Not ported, and why" table and will never have a program, which is v7's own
+# habit -- a manual page is where a decision about a program is recorded whether or not the
+# program exists.
 #
 # WHAT READS THEM is /usr/bin/man below, which finds the file, and /usr/bin/manview beside
 # it, which formats what man found.  THEY ARE STAGED AS SOURCES AND NOT PREFORMATTED, which is
@@ -2461,11 +2478,12 @@ mode 0644
 
 file /usr/lib/atrun     # cmd/atrun -- task C21, at(1)'s other half, and documented inside
                         # at.1 rather than in a page of its own.  /usr/lib because it is not
-                        # a command a user types: v7 ran it from cron every five minutes, and
-                        # THERE IS NO cron ON THIS IMAGE YET (task C22), so until there is it
-                        # is run by hand.  NOT SETUID: it needs suser() for the setuid(2) that
+                        # a command a user types: /etc/cron runs it every five minutes, which
+                        # is what task C22 put on this image and is the granularity at(1)
+                        # promises.  NOT SETUID: it needs suser() for the setuid(2) that
                         # drops to the job's owner, so root runs it -- and a bit here would
-                        # hand that same code path to anybody.  cmd/at/README.md.
+                        # hand that same code path to anybody.  That is also why cron does
+                        # not setuid(1); cmd/at/README.md and cmd/cron/README.md.
 source ../../rootfs/usr/lib/atrun
 mode 0755
 
@@ -2486,6 +2504,18 @@ file /usr/lib/makekey   # cmd/makekey -- task C19, and the SECOND PROGRAM ON THI
                         # secret of its own.
 source ../../rootfs/usr/lib/makekey
 mode 0755
+
+file /usr/lib/crontab   # cmd/cron's schedule -- task C22, and the FIFTH entry in /usr/lib
+                        # that is not a program: data read by /etc/cron above, hence 0644.
+                        # 0644 AND ROOT'S IS THE WHOLE SECURITY ARGUMENT for cron running as
+                        # root: nobody but root can put a command in this file.  v7's three
+                        # lines, TWO OF THEM COMMENTED OUT -- dmesg wants a /usr/adm this image
+                        # deliberately has not got, and calendar(1) is task C23 -- so the
+                        # live line is the one that collects at(1) jobs every five minutes.  A
+                        # line cron cannot parse is dropped in silence, which is what makes a
+                        # `#' comment work.  Same bytes as cmd/cron/crontab.
+source ../../rootfs/usr/lib/crontab
+mode 0644
 
 file /usr/lib/units     # cmd/units's conversion table -- task C18, and the FOURTH entry in
                         # /usr/lib that is not a program: data read by /bin/units above, hence

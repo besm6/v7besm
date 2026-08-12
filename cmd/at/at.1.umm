@@ -31,9 +31,10 @@ and days may be recognizably truncated. Examples of legitimate commands are
 *At* programs are executed by periodic execution of the command */usr/lib/atrun* from cron(8).
 The granularity of *at* depends upon how often *atrun* is executed.
 
-Note: there is no cron(8) on this system yet, so nothing runs */usr/lib/atrun* by itself. Until
-there is, the super-user runs it by hand and that is when jobs are collected. *Atrun* must be
-run by root: it uses setuid(2) to become the owner of each job, which is a privileged call.
+Note: */usr/lib/atrun* must be run by the super-user — it uses setuid(2) to become the owner of
+each job, which is a privileged call. That is why cron(8) on this system does not drop to uid 1
+as v7's did: the two would not otherwise compose, and the granularity above depends on cron
+running atrun every five minutes.
 
 Note: this machine has no clock-calendar, so the time of day is whatever the last date(1)
 command set — the operator sets it once, in single-user mode, after which it advances
