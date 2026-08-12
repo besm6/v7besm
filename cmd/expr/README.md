@@ -1,6 +1,6 @@
 # `expr`, and what a grammar costs on this machine
 
-Task C11, and the task C10 existed for: [`../TODO.md`](../TODO.md) named `expr` the smallest
+Task C11, and the task C10 existed for: [`../README.md`](../README.md) named `expr` the smallest
 consumer of `b6yacc` and the one that would prove it end to end. It does — `y.output` reports
 **0 shift/reduce and 0 reduce/reduce conflicts** over 22 rules and 48 states, and the generated
 parser compiled and ran with no change to the skeleton — but the interesting half is what the

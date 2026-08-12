@@ -7,7 +7,7 @@ whole toolchain — the assembler (`cmd/as`), the linker and the binutils
 the *host* C compiler and runs on the host.
 
 **These sources are also cross-compiled and run on the BESM-6 itself.** The native
-`/usr/bin/as` and `/usr/bin/ld` (task **C9b** in [../TODO.md](../TODO.md)), the read-only
+`/usr/bin/as` and `/usr/bin/ld` (task **C9b** in [../README.md](../README.md)), the read-only
 binutils (**C9c**) and `/usr/bin/{ar,ranlib}` (**C9d**) link them directly — there is no
 native archive — so [`sources.cmake`](sources.cmake) names the
 list once for both worlds. It names two lists: everything, and the subset without the

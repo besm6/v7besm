@@ -18,6 +18,7 @@ MSG badopt  = "bad option(s)";
 MSG mailmsg = "you have mail\n";
 MSG nospace = "no space";
 MSG synmsg  = "syntax error";
+MSG toodeep = "too deep";
 
 MSG badnum     = "bad number";
 MSG badparam   = "parameter not set";

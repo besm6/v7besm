@@ -5,7 +5,7 @@
 //
 //      comm [ - [ 123 ] ] file1 file2
 //
-// One of task C5b's seven (../TODO.md).  Nothing in it parses, so it has no §2 in it at all
+// One of task C5b's seven (../README.md).  Nothing in it parses, so it has no §2 in it at all
 // -- no `char *' relational anywhere -- and no `long', no `%D' and no character-indexed
 // table.  What it does have is one construct that is undefined C everywhere and actively
 // dangerous here, and one that stops being a lie on this machine.

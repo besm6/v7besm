@@ -1,6 +1,6 @@
 # `ed`, and the eighth bit it could not spare
 
-Task C3, the pivot of [../TODO.md](../TODO.md): before `/bin/ed` was on the image, every byte
+Task C3, the pivot of [../README.md](../README.md): before `/bin/ed` was on the image, every byte
 of every file on it had been written on the build host and staged in by `b6fsutil`. The C11
 pass over [ed.c](ed.c) — 50 functions, 46 with an implicit `int`, all with K&R parameter lists,
 27 untyped `register` declarations — is described in that file's own header and is not repeated
@@ -32,7 +32,7 @@ grepping for one.
 
 ## Two corrections to the record
 
-Both are fixed in [../README.md](../README.md) and [../TODO.md](../TODO.md) in the same change,
+Both are fixed in [../README.md](../README.md) and [../README.md](../README.md) in the same change,
 because a README that records only its own findings leaves the wrong warning standing.
 
 **`ed` has twenty `char *` comparisons, not the ten §2's table claimed** — the densest

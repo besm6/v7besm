@@ -5,7 +5,7 @@
 //
 //      find pathname-list expression
 //
-// The last of task C5f's seven (../TODO.md), the largest of them at 725 lines, and THE ONLY
+// The last of task C5f's seven (../README.md), the largest of them at 725 lines, and THE ONLY
 // ONE WITH NO b6sim HALF AT ALL -- the second program in this directory after mount/umount
 // to have none.  ./README.md is the account; it reads directory descriptors, which b6sim
 // refuses, popen()s pwd, and fork/execvp's for -exec, so every assertion about it is in
@@ -31,7 +31,7 @@
 //
 // -cpio IS DELETED, decision (B) of the task brief.  It wrote a PDP-11 cpio archive out of
 // 16-bit shorts, through a run-time byte-order probe (`union { long l; short s[2]; char
-// c[4]; }'), and chgreel() prompted on /dev/tty for the next TAPE REEL.  ../TODO.md's
+// c[4]; }'), and chgreel() prompted on /dev/tty for the next TAPE REEL.  ../README.md's
 // exclusion table drops all tape, this kernel has no tape driver and no bdevsw row for one,
 // and an archive nothing here can read is not a service.  It took ~140 lines with it,
 // including this file's only sbrk, its only `short' and its only /dev/tty -- so `find' now

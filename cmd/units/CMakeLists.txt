@@ -1,4 +1,4 @@
-# units(1) -- task C18 (../TODO.md), and the first program on this image whose whole
+# units(1) -- task C18 (../README.md), and the first program on this image whose whole
 # subject is floating point.  README.md beside this file is the account.
 #
 # LIBS libm for fabs() alone: the range gates in units.c want a magnitude and nothing

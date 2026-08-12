@@ -5,7 +5,7 @@
 //
 //      nice [ -number ] command [ arguments ]
 //
-// The first of task C8's five (../TODO.md) and the only one of them that asks the kernel
+// The first of task C8's five (../README.md) and the only one of them that asks the kernel
 // nothing: no kctl(2), no memory device, no privilege.  It is here first because it proves
 // the scaffolding -- the CMake call, the manifest stanza, ROOTFS_FILES, the two hard-coded
 // `ls /bin' listings and a b6sim case -- on twenty lines of code.

@@ -5,7 +5,7 @@
 //
 //      tail [ +-number[lbcr] ] [ file ]
 //
-// One of task C5b's seven (../TODO.md).  No §2 in it -- every bound in the ring below is an
+// One of task C5b's seven (../README.md).  No §2 in it -- every bound in the ring below is an
 // int index -- and no stdio at all: tail is read(2) and write(2) end to end, which puts it in
 // the company of tee, test and getty at the bottom of ../README.md §6's table.
 //
@@ -16,7 +16,7 @@
 // without looking at whether lseek failed, so any earlier errno of ESPIPE would have made
 // tail treat a seekable file as a pipe.
 //
-// `-b' COUNTS BSIZE AND NOT 512 (§4), which ../TODO.md left to this task to settle.  512
+// `-b' COUNTS BSIZE AND NOT 512 (§4), which ../README.md left to this task to settle.  512
 // named a PDP-11 disk block and names nothing on this machine, so the rule dd(1) was ported
 // under applies -- a constant is the user's business only while it still names something
 // here.  `b' therefore means one filesystem block, 3072 bytes, exactly as dd's `b' suffix

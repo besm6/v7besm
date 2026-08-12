@@ -1,6 +1,6 @@
 # /bin/wc -- Unix v7 wc(1), built natively for the BESM-6.
 #
-# One of task C5a's six (../TODO.md), and the first of the text filters.  b6_prog()
+# One of task C5a's six (../README.md), and the first of the text filters.  b6_prog()
 # (../../scripts/BesmCross.cmake) runs the b6* toolchain over wc.c, links it `crt0.o wc.o -lc
 # -lruntime' against the libc built in ../../lib, and stages the result as build/rootfs/bin/wc.
 #

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two ranlibs built from one source must build the same __.SYMDEF.  Task C9d,
-# ../../TODO.md.  Invoked by ctest as:
+# ../../README.md.  Invoked by ctest as:
 #
 #	run-ranlib-test.sh HOSTRANLIB HOSTAR SIM PROG PROGAR AS LIBCDIR SRCDIR NAME KIND
 #

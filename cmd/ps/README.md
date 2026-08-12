@@ -1,6 +1,6 @@
 # `ps` needs a u-area that is not its own, and no longer reads one itself
 
-Task C8's fourth ([../TODO.md](../TODO.md)), and the one that brief told nobody to port. This
+Task C8's fourth ([../README.md](../README.md)), and the one that brief told nobody to port. This
 is the account of what replaced v7's 408 lines and of the one rule the replacement turns on.
 
 **The rule is now the kernel's.** `ps` reached the u-area through `/dev/kmem` and `/dev/mem`

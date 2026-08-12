@@ -1,5 +1,5 @@
 #
-# yacc, the parser generator, installed as b6yacc.  Task C10a (../TODO.md).
+# yacc, the parser generator, installed as b6yacc.  Task C10a (../README.md).
 # README.md is the account of what the port changed and why.
 #
 # yaccpar.c is the fifth source and is NOT compiled: it is the parser skeleton,

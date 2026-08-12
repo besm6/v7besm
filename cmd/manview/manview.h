@@ -1,6 +1,6 @@
 //
 // manview -- what the two hundred manual pages of doc/Manual_Page_Format.md look like on a
-// terminal.  Task C25a (../TODO.md).
+// terminal.  Task C25a (../README.md).
 //
 // TWO HALVES AND ONE CONTRACT BETWEEN THEM.  parse.c reads the dialect and calls the
 // out_*() routines below in reading order; render.c is those routines and knows nothing

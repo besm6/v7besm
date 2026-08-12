@@ -1,9 +1,9 @@
 #
-# /usr/bin/manview -- the renderer for the manual pages.  Task C25a (../TODO.md).
+# /usr/bin/manview -- the renderer for the manual pages.  Task C25a (../README.md).
 #
 # THE THIRD PROGRAM HERE THAT IS NOT A PORT OF A v7 COMMAND, after ../novi and ../more, and
 # for a sharper reason than either: the thing v7 ran in this position was nroff, which is not
-# in the v7 source tree at all and which ../TODO.md's "Not ported, and why" table refuses
+# in the v7 source tree at all and which ../README.md's "Not ported, and why" table refuses
 # along with the whole typesetting suite.  The pages on this image are the dialect
 # ../../doc/Manual_Page_Format.md describes and this is what formats them.
 #

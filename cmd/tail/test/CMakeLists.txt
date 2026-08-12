@@ -1,7 +1,7 @@
 # tail's b6sim cases -- task C5b.
 #
 # `blocks' IS THE CASE THE PORT EXISTS TO SETTLE, and it is built so that it can only pass
-# under one answer.  ../TODO.md left `-b's unit open -- v7's `n <<= 9' is 512 -- and this port
+# under one answer.  ../README.md left `-b's unit open -- v7's `n <<= 9' is 512 -- and this port
 # takes BSIZE (3072), for dd(1)'s reason: a constant is the user's business only while it
 # still names something on this machine, and 512 named a PDP-11 disk block (../README.md §4).
 # big.txt is 3072 bytes of `x' followed by the nine bytes `boundary\n', so `tail +2b' skips

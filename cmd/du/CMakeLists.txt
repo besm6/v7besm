@@ -1,6 +1,6 @@
 # /bin/du -- Unix v7 du(1), built natively for the BESM-6.
 #
-# The second of task C4a's three (../TODO.md): a cmd/ subdirectory that is NOT a host tool.
+# The second of task C4a's three (../README.md): a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over du.c, links it
 # `crt0.o du.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/bin/du.  Added from inside the top-level libruntime guard, after lib/, and

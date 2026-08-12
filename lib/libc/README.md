@@ -339,7 +339,7 @@ programs in `cmd/` that walk a directory each grew their own reader and their ow
 four mistakes: the free slot `unlink(2)` leaves behind, the name that is not NUL-terminated when
 it fills the field, the `strlen` that then runs into the next entry's `d_ino`, and `DIRENTSZ`
 re-derived. `cmd/ls` was the first caller; `cmd/make` and `cmd/at` followed, and
-[`../../cmd/TODO.md`](../../cmd/TODO.md) task C24 converted the last seven — `du`, `find`, `rm`,
+[`../../cmd/README.md`](../../cmd/README.md) task C24 converted the last seven — `du`, `find`, `rm`,
 `rmdir`, `pwd`, `tar` and `sh/expand.c`. **Nothing in `cmd/` reads a `struct direct` out of a
 pathname now**; the five programs that still include `<sys/dir.h>` (`fsck`, `mkfs`, `ncheck`,
 `dcheck`, `pstat`) read one out of a block they fetched from `/dev/rmd*` themselves, where there
@@ -721,4 +721,4 @@ top saying so.
 
 **Nothing installs them** — no `CMakeLists.txt` in this tree has a man rule yet, which is also true
 of libtermcap's and libcurses' — but they are staged onto the image all the same, by the top-level
-`B6_STAGE_MAN` glob, where manview(1) ([`../../cmd/TODO.md`](../../cmd/TODO.md) C25a) formats them.
+`B6_STAGE_MAN` glob, where manview(1) ([`../../cmd/README.md`](../../cmd/README.md) C25a) formats them.

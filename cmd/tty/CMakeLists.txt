@@ -1,6 +1,6 @@
 # /bin/tty -- Unix v7 tty(1), built natively for the BESM-6.
 #
-# One of task C2b's five (../TODO.md): a cmd/ subdirectory that is NOT a host tool.
+# One of task C2b's five (../README.md): a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over tty.c, links it
 # `crt0.o tty.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/bin/tty.  Added from inside the top-level libruntime guard, after lib/, and

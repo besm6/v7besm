@@ -1,6 +1,6 @@
 # /etc/quot -- Unix v7 quot(1M), built natively for the BESM-6.
 #
-# The third of task C4a's three (../TODO.md): a cmd/ subdirectory that is NOT a host tool.
+# The third of task C4a's three (../README.md): a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over quot.c, links it
 # `crt0.o quot.o -lc -lruntime' against the libc built in ../../lib, and stages the result
 # as build/rootfs/etc/quot.  Added from inside the top-level libruntime guard, after lib/,

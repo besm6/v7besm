@@ -1,6 +1,6 @@
 # /etc/mkfs -- Unix v7 mkfs(1M), built natively for the BESM-6.
 #
-# Task C4c (../TODO.md): the first program here that can CREATE a filesystem, and the first
+# Task C4c (../README.md): the first program here that can CREATE a filesystem, and the first
 # that WRITES a raw device at all -- kernel/dev/md.c's mdwrite() was dead code until this
 # one.  b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over mkfs.c, links
 # it `crt0.o mkfs.o -lc -lruntime' against the libc built in ../../lib, and stages the

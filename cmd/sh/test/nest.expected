@@ -1,0 +1,8 @@
+IFS= 	
+
+a=x
+b=y
+c=z
+d=w
+depth=twelve
+outer=start

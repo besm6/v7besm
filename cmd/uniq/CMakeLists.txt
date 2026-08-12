@@ -1,6 +1,6 @@
 # /bin/uniq -- Unix v7 uniq(1), built natively for the BESM-6.
 #
-# One of task C5b's seven (../TODO.md).  uniq.c's header is the account: the unbounded gline()
+# One of task C5b's seven (../README.md).  uniq.c's header is the account: the unbounded gline()
 # §6 asks every port to bound, the isdigit() that indexed off the end of libc's 129-entry
 # class table, and the final line with no newline that v7 threw away.
 #

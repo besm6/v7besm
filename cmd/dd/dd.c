@@ -5,7 +5,7 @@
 //
 // The v7 program, unchanged in what it does: read records of `ibs' bytes, optionally put
 // every byte through a conversion, write records of `obs' bytes, and report how many whole
-// and partial records went each way.  Task C4b (../TODO.md), and the reason it comes before
+// and partial records went each way.  Task C4b (../README.md), and the reason it comes before
 // mkfs(1) and fsck(1) is that it is how anything gets copied to or from a RAW DEVICE.  It
 // reports RECORDS and not blocks, so ../README.md SS4's 1024-byte reporting unit does not
 // reach this program: no number it prints changes unit, and there is no KBPB anywhere here.

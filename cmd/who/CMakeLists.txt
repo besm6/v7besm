@@ -1,6 +1,6 @@
 # /bin/who -- Unix v7 who(1), built natively for the BESM-6.
 #
-# Task C6's first program (../TODO.md), and the first reader /etc/utmp has ever had: init
+# Task C6's first program (../README.md), and the first reader /etc/utmp has ever had: init
 # creates that file and blanks records in it, login writes them, getlogin() reads the one
 # record it is standing on, and until now nothing printed the table.
 #

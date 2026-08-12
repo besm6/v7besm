@@ -1,4 +1,4 @@
-# sed(1) -- task C5e, the seventeenth of cmd/TODO.md's text filters.
+# sed(1) -- task C5e, the seventeenth of the text filters.
 #
 # THREE SOURCES, WHICH IS THE FIRST THING ABOUT THIS PORT.  v7's sed.h DEFINED every one of
 # the program's forty-odd globals -- `char genbuf[LBSIZE];' -- in a header both sed0.c and

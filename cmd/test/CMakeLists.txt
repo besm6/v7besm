@@ -1,6 +1,6 @@
 # /bin/test -- Unix v7 test(1), built natively for the BESM-6.
 #
-# The program of task C2b (../TODO.md), and the one that changes what a shell SCRIPT can be:
+# The program of task C2b (../README.md), and the one that changes what a shell SCRIPT can be:
 # this shell has no built-in for it, so until now nothing on this machine could branch.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over test.c, links it
 # `crt0.o test.o -lc -lruntime' against the libc built in ../../lib, and stages the result as

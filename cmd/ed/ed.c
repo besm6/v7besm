@@ -5,7 +5,7 @@
 //
 //      ed [-] [-q] [-x] [file]
 //
-// Task C3 (../TODO.md), and the pivot: until this program ran, nothing on this machine
+// Task C3 (../README.md), and the pivot: until this program ran, nothing on this machine
 // could AUTHOR text.  Every file on the image was written on the build host and staged in
 // by b6fsutil; the guest could create, copy, move and re-permission files, and since task
 // C2b a script could branch, but it could not produce a line of anything.  ../README.md is
@@ -1848,7 +1848,7 @@ static int backref(int i, char *lp)
 }
 
 // Is c in the class at `set'?  The class is a length byte followed by its members laid out
-// LITERALLY -- not the CCL bitmap that grep and sed use, which is what ../TODO.md's brief
+// LITERALLY -- not the CCL bitmap that grep and sed use, which is what ../README.md's brief
 // for this task described.  So it was byte-capable already: the only thing that had ever
 // kept a byte above 0177 out of a class was getchr() masking the pattern on its way in.
 static int cclass(char *set, int c, int af)

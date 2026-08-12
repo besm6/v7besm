@@ -5,7 +5,7 @@
 //
 //      cal [ month ] year
 //
-// One of task C5f's seven (../TODO.md), and the cleanest of them: no §2, no §3, no §4, no
+// One of task C5f's seven (../README.md), and the cleanest of them: no §2, no §3, no §4, no
 // §11 and no floating point anywhere.  It is worth saying why, because it is not luck.
 //
 // EVERY INTERMEDIATE WAS ALREADY BOUNDED.  jan1() computes `4 + y + (y+3)/4' and then

@@ -25,7 +25,7 @@
 // process spawning have been rewritten in C11.
 //
 // THESE SOURCES ARE BUILT TWICE, as b6cc for the build machine and as the BESM-6's
-// own /usr/bin/cc (task C9e, cmd/TODO.md).  The only difference between the two is
+// own /usr/bin/cc (task C9e, cmd/README.md).  The only difference between the two is
 // the profile below -- where the sub-tools, the headers and the libraries live --
 // and the one thing the machine cannot do, which is compile C: b6parse, b6lower
 // and b6codegen belong to the external c-compiler repository and are not on the

@@ -107,7 +107,7 @@ form is: **when a program reads a fixed absolute path, ask whose path it is unde
 So `ctest -L cmd` says nothing whatever about `mount(2)`, and
 [kernel/test/mount](../../kernel/test/mount.sh) is the only thing that holds these two
 programs. C4e recorded the mirror image of this — four programs asserted under b6sim alone,
-with the device untested — and [../TODO.md](../TODO.md) carried it as a named loose end. That
+with the device untested — and [../README.md](../README.md) carried it as a named loose end. That
 end is closed here too: section 6 of `mount.sh` runs `icheck`, `dcheck`, `ncheck` and `clri`
 over the real device, on a pack that has just been mounted, written and unmounted.
 

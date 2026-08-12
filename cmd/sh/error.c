@@ -35,6 +35,21 @@ void sigchk(void)
 }
 
 //
+// Find out if the recursion has run the MACHINE stack out.  NOTHING ELSE CAN TELL THE
+// SHELL THIS: an overflow wraps onto word 0 and rewrites the shell's own image rather
+// than faulting (README.md, "The stack").  The measurement is a char * difference from
+// the floor main() recorded -- the arithmetic stak.c already does with `brkend -
+// stakbot', and no pointer is made up out of an integer.  DOES NOT RETURN when it fires.
+//
+void deepchk(void)
+{
+    CHAR here;
+
+    if ((STKPTR)&here - stackfloor > STAKROOM)
+        error(toodeep);
+}
+
+//
 // Report "sh: s1: s2" and abandon the command.  s2 may be null, in which case only s1 is
 // printed -- that is what error() below is.  DOES NOT RETURN.
 //

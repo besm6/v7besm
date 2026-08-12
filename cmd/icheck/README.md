@@ -141,7 +141,7 @@ of it**. A green `cmd_icheck_*` says the arithmetic is right and says nothing wh
 the device, and `clri` and `icheck -s` are the first programs since `mkfs` and `fsck` to
 write one.
 
-That was a deliberate deferral rather than an oversight, `../TODO.md` carried it as this
+That was a deliberate deferral rather than an oversight, `../README.md` carried it as this
 task's one named loose end with the volumes a closing test would take, and **task C4f
 closed it** — folded into that task's harness rather than spending a second two-minute boot,
 which is what the plan recommended. [kernel/test/mount.sh](../../kernel/test/mount.sh)

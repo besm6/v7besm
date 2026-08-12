@@ -1,4 +1,4 @@
-# /etc/update -- Unix v7 update(8), built natively for the BESM-6.  Task C20 (../TODO.md).
+# /etc/update -- Unix v7 update(8), built natively for the BESM-6.  Task C20 (../README.md).
 #
 # /etc AND NOT /bin, which is v7's placement and update.8.umm's SYNOPSIS: it is not a command
 # a user types.  The page is already on the image -- B6_STAGE_MAN globs cmd/*/*.umm and

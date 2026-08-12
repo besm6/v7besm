@@ -1,5 +1,5 @@
 # Tests for /usr/bin/cpp, the native build of cmd/cpp (task C9a).  Two kinds, and they
-# assert different things -- ../TODO.md SS5 and run-cpp-test.sh's header have the argument:
+# assert different things -- ../README.md SS5 and run-cpp-test.sh's header have the argument:
 #
 #   rootfs_cpp_<case>  the AGREEMENT tests.  Host b6cpp and native cpp over one fixture,
 #                      diffed live.  Says the port is faithful; says nothing about whether

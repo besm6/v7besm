@@ -1,4 +1,4 @@
-# bc(1) -- task C16 (../TODO.md), the calculator language, and the front end /bin/dc
+# bc(1) -- task C16 (../README.md), the calculator language, and the front end /bin/dc
 # exists for: it compiles this language into dc commands and execs dc to run them.
 # C15 put the engine on the image; README.md beside this file is the account.
 #

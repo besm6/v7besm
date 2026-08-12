@@ -84,7 +84,7 @@ The three `volume` greps — `run-mkfs.sh` (3090), `run-fsck.sh` (3092), `run-mo
 
 `mkfs` has to refuse a size bigger than the drive, and the drive's size is `MDNBLK` — a
 constant of `kernel/dev/md.c` that no header exports to a user program. Duplicating it is
-exactly what `../TODO.md` forbids: an on-disk constant has one home and a program asserts
+exactly what `../README.md` forbids: an on-disk constant has one home and a program asserts
 against it rather than restating it.
 
 So there is no size check. `mkfs` **reads the last block before it writes the first**, and

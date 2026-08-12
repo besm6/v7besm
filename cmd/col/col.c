@@ -5,7 +5,7 @@
 //
 //      col [ -bfx ]
 //
-// One of task C5b's seven (../TODO.md), and the one deliberate divergence in the task.
+// One of task C5b's seven (../README.md), and the one deliberate divergence in the task.
 // README.md beside it is the account; §10 asks for a divergence to be written down twice and
 // this header is one of the two, col.1.umm the other.
 //
@@ -30,7 +30,7 @@
 // The alternative to deleting it was a parallel flag array beside lbuff, which is what ed's
 // QESC prefix is the precedent for.  It was not worth it: there is no Model 37 on this
 // machine, no way to attach one, and no producer of SO/SI here -- v7's col exists to
-// post-process nroff, and ../TODO.md's exclusion table records that there is no nroff in
+// post-process nroff, and ../README.md's exclusion table records that there is no nroff in
 // this source tree at all.  So this is the cut getty(1) made to the speed table and stty(1)
 // is told to make to its capability list: DELETE WHAT THIS HARDWARE HAS NOT GOT, rather than
 // carry a mechanism that can only get in the way of something real.  What is left is a col

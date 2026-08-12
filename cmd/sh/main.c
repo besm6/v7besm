@@ -43,6 +43,10 @@ static SHFILEBLK stdfile;
 // The input the shell is reading commands from right now.  push() and pop() move it.
 SHFILE standin = &stdfile;
 
+// The bottom of the machine stack: a parameter of main(), which sits just above the
+// argv/envp block.  deepchk() (error.c) measures the recursion against it.
+STKPTR stackfloor;
+
 // Defined below.
 static void exfile(BOOL prof);
 static void Ldup(INT fa, INT fb);
@@ -61,6 +65,9 @@ static void Ldup(INT fa, INT fb);
 int main(int c, char **v)
 {
     INT rflag = ttyflg;
+
+    // where the machine stack starts, for deepchk()
+    stackfloor = (STKPTR)&c;
 
     // initialise storage allocation
     stdsigs();

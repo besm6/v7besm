@@ -1,6 +1,6 @@
 # df, and the four rules a raw read obeys
 
-`/bin/df`, `/bin/du` and `/etc/quot` are task C4a ([../TODO.md](../TODO.md)) — the first three
+`/bin/df`, `/bin/du` and `/etc/quot` are task C4a ([../README.md](../README.md)) — the first three
 programs on this image that can say anything about the filesystem they live on. Everything
 before them could *change* the store; these measure it.
 
@@ -146,7 +146,7 @@ data-area subtraction and the corrected i-node count above cannot drift apart.
 
 ## A raw transfer has four conditions, and three of them fail with `EFAULT`
 
-`cmd/TODO.md` said of task C4 that "the raw devices these need are already on the image —
+`cmd/README.md` said of task C4 that "the raw devices these need are already on the image —
 `/dev/rmd0` and `/dev/rmb0`". They are, and they are the right ones. But `open`/`lseek`/`read`
 on `/dev/rmd0` is not the v7 call sequence it looks like: it goes
 [`physio()`](../../kernel/dev/bio.c) → [`mdstrategy()`](../../kernel/dev/md.c), and between them

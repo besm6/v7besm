@@ -97,7 +97,7 @@
 #include <unistd.h>
 
 // What this file's arithmetic assumes of the layout, asserted rather than re-derived
-// (../TODO.md, task C4).  The headers carry the rest.
+// (../README.md, task C4).  The headers carry the rest.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
 _Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
 _Static_assert(1 + NICFREE <= BSIZEW, "a chain block must fit the block buffer");

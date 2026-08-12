@@ -96,7 +96,7 @@ dir /etc
 dir /usr
 
 # THE TOOLCHAIN.  It began as one program -- /usr/bin/cpp, the C preprocessor, the first
-# thing on this disk built from THE SAME SOURCES AS A HOST TOOL (task C9a in cmd/TODO.md)
+# thing on this disk built from THE SAME SOURCES AS A HOST TOOL (task C9a in cmd/README.md)
 # -- and tasks C9b through C9e finished it: eleven programs now, from the preprocessor to
 # the cc(1) driver that runs them.  The shell's default path is already ":/bin:/usr/bin"
 # (cmd/sh/msg.c), so a bare `cc' finds it without /etc/rc setting PATH at all.
@@ -1687,7 +1687,7 @@ mode 0644
 # is worth less than the blocks.  TWO OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
 # THIS IMAGE -- ac and sa; crypt and makekey landed with task C19, update with C20, at with
 # C21, cron with C22, mail with C28 and calendar with C23.  The two that are left are in
-# cmd/TODO.md's "Not ported, and why" table and will never have a program, which is v7's own
+# cmd/README.md's "Not ported, and why" table and will never have a program, which is v7's own
 # habit -- a manual page is where a decision about a program is recorded whether or not the
 # program exists.  mail was in that table too until C28 read the preamble that says each row
 # can be re-examined.  THE CLAIM THAT A PAGE IS ALREADY CORRECT WHEN THE PROGRAM LANDS DID NOT

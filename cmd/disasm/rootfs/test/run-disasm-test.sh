@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two disassemblers built from one source must decode a file the same way.  Task C9c,
-# ../../TODO.md.  Invoked by ctest as:
+# ../../README.md.  Invoked by ctest as:
 #
 #	run-disasm-test.sh HOSTDISASM SIM PROG AS LD SRCDIR NAME FIXTURE KIND [args...]
 #

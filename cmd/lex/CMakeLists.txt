@@ -1,5 +1,5 @@
 #
-# lex, the lexical-analyser generator, installed as b6lex.  Task C10b (../TODO.md).
+# lex, the lexical-analyser generator, installed as b6lex.  Task C10b (../README.md).
 # README.md is the account of what the port changed and why.
 #
 # ncform is the seventh source and is NOT compiled: it is the scanner skeleton,

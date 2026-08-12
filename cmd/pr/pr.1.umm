@@ -48,7 +48,7 @@ Options apply to all following files but may be reset between files:
 : Print all *files* simultaneously, each in one column,
 
 Inter-terminal messages via write(1) are forbidden during a *pr*. *Note:* neither write(1) nor
-mesg(1) is on this system yet - see *cmd/TODO.md* - but *pr* still sets the mode of its own
+mesg(1) is on this system yet - see *cmd/README.md* - but *pr* still sets the mode of its own
 terminal to 0600 for the duration of a listing and puts it back on the way out, so that they
 need no change when they arrive.
 

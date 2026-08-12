@@ -47,7 +47,7 @@ date >/dev/console
 # kernel/test/multi asserts this line the way it asserts the one above.
 #
 # ACCTON WAS THE THIRD AND IS NOT COMING.  Process accounting is in the "Not
-# ported, and why" table of cmd/TODO.md now, not in a task: the kernel side is
+# ported, and why" table of cmd/README.md now, not in a task: the kernel side is
 # real -- acct(2) works -- but there is nobody on this machine to bill, sa's
 # whole subject is a record nothing here writes, and it would want a /usr/adm
 # that root.manifest does not have.  So that line of the v7 rc is gone rather

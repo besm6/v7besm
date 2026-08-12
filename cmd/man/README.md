@@ -105,7 +105,7 @@ and there is no `whatis` database for one to read. That deletion is worth one li
 since it is the only thing here that could be mistaken for a gap: the database is the cheap half
 whenever somebody wants it, because §9 rule 3 fixes the shape of every page's NAME paragraph —
 comma-separated names, ` - `, a description — so `/usr/man/whatis` is a `sed` over two hundred
-files, and [`../TODO.md`](../TODO.md) C25's table row is where that is booked.
+files, and [`../README.md`](../README.md) C25's table row is where that is booked.
 
 The nineteen `cmd/*/CMakeLists.txt` and `README.md` comments that used to say *"there is no
 renderer yet"* were swept when C25a landed, which is exactly what this paragraph asked for when

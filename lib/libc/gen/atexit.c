@@ -2,7 +2,7 @@
 // atexit -- register a function to be called at normal program termination.
 //
 // C11 §7.22.4.2, and <stdlib.h> has declared it since this tree's headers were
-// written; nothing implemented it until cmd/cc wanted it (task C9e, cmd/TODO.md)
+// written; nothing implemented it until cmd/cc wanted it (task C9e, cmd/README.md)
 // to unlink its temporary files however the driver leaves.  v7 had no such thing:
 // a v7 program that wanted cleanup on every path wrote its own exit() wrapper,
 // which is what several in cmd/ still do.

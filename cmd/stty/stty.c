@@ -56,7 +56,7 @@
 // TANDEM IS LEFT UNREACHABLE, deliberately.  The flag is honoured -- ttyblock() queues the
 // stop character when the input queue passes TTYHOG/2 -- but v7's stty never had an entry
 // for it, the cut above is subtractive on getty's precedent, and on a typewriter with no
-// keyboard buffer to stop it means as little as the delays do.  ../TODO.md carries it as a
+// keyboard buffer to stop it means as little as the delays do.  ../README.md carries it as a
 // loose end rather than this file inventing a name for it.
 //
 // TIOCTSTP IS NOT COMING BACK.  ('t' << 8) | 16 had two names in v7, TIOCTSTP in <sgtty.h>

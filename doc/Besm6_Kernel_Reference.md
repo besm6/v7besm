@@ -374,6 +374,15 @@ What the existing tests cost to get right:
   part, so the words above `u_stkdepth` are the previously resumed process's kernel stack, and both
   `core()`, which dumps the whole `USIZE` page ([sig.c](../kernel/sig.c)), and `ptrace`'s u-area window can
   show them. The dump size is part of the core file's layout, so this is accepted, not fixed.
+* **A USER stack overflow wraps rather than faults, and the kernel cannot see it.** The user stack
+  is the top four pages and grows up; `grow()` extends it on a fault one page above, and past page
+  31 there is nowhere to extend to. But the process never gets that far: a user address is 15 bits
+  and the process owns all 32 pages, so a store past `077777` **wraps mod 2^15 onto word 0** — the
+  program's own const image, mapped and writable. No ГРП cause is raised, `trap()` is never
+  entered, and the program corrupts itself instead. There is no guard page to spare (32 pages
+  *are* the address space) and no test can be written on this side of the boundary; a program that
+  recurses on input has to bound itself, which is what `/bin/sh`'s `deepchk()` does since task C29
+  ([../cmd/sh/README.md](../cmd/sh/README.md)).
 * **Kernel-stack frames above `076000` are not saved.** The overflow page is where a deep path's
   interrupt frames live, and interrupt handlers never sleep, so the measured workload loses nothing
   — the deepest `resume()` in a boot → `/etc/rc` → shell → `ls /bin` run had `r15 = 075302`. A path

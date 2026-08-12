@@ -1,4 +1,4 @@
-# /usr/lib/atrun -- Unix v7 atrun.  Task C21 (../TODO.md); ../at/README.md is the account,
+# /usr/lib/atrun -- Unix v7 atrun.  Task C21 (../README.md); ../at/README.md is the account,
 # and at.1 is where this program is documented -- it has no page of its own.
 #
 # /usr/lib because at.1 says so: it is not a command a user types.  Its periodic caller is

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two sizes built from one source must print the same six numbers.  Task C9c,
-# ../../TODO.md.  Invoked by ctest as:
+# ../../README.md.  Invoked by ctest as:
 #
 #	run-size-test.sh HOSTSIZE SIM PROG AS SRCDIR NAME FIXTURE [args...]
 #

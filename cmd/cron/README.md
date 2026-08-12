@@ -21,7 +21,7 @@ v7's `cron` calls **`setuid(1)`** as the first statement of `main`, and `atrun`'
 `setuid(stbuf.st_uid)` — the call that gives a job the identity of whoever submitted it — is
 gated on `suser()`. So a `cron`-forked `atrun` runs as uid 1 and cannot do the one thing it
 exists to do, and the crontab line `0,5,10,… /usr/lib/atrun` is exactly that composition.
-[`../TODO.md`](../TODO.md) called this C22's first question rather than an implementation
+[`../README.md`](../README.md) called this C22's first question rather than an implementation
 detail, and it was right to.
 
 **The `setuid(1)` is gone.** Three things make that the cheap answer rather than the lazy one:

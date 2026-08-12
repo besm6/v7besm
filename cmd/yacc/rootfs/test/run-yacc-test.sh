@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two yaccs built from one source must generate the same parser.  Task C10c,
-# ../../../TODO.md; ../../README.md, "Testing the native build", has the argument.
+# ../../../README.md; ../../README.md, "Testing the native build", has the argument.
 # Invoked by ctest as:
 #
 #	run-yacc-test.sh HOSTYACC SIM PROG YACCPAR SRCDIR NAME GRAMMAR [flags...]

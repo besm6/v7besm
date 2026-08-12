@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two linkers built from one source must produce the same image, byte for byte.
-# Task C9b, ../../TODO.md.  Invoked by ctest as:
+# Task C9b, ../../README.md.  Invoked by ctest as:
 #
 #	run-ld-test.sh HOSTLD SIM PROG NM AS SRCDIR NAME FIXTURE [ldargs...]
 #

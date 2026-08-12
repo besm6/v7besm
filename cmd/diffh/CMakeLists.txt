@@ -1,6 +1,6 @@
 # /usr/lib/diffh -- Unix v7 diffh(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md), and THE ONLY PROGRAM OF THE TASK THAT DOES NOT GO IN /bin.  It is
+# Task C5f (../README.md), and THE ONLY PROGRAM OF THE TASK THAT DOES NOT GO IN /bin.  It is
 # not a command a user types: diff -h reaches it with
 #
 #	execv("/usr/lib/diffh", args)
@@ -10,7 +10,7 @@
 # are the same and have to stay so.  It is also the first entry this image has ever had in
 # /usr/lib, which ../../root.manifest therefore has to create.
 #
-# WHY IT IS PORTED AT ALL.  ../TODO.md offered the choice -- port it or drop -h -- and the
+# WHY IT IS PORTED AT ALL.  ../README.md offered the choice -- port it or drop -h -- and the
 # argument for porting is not completeness: diff prints `files too big, try -h' from noroom()
 # when its vectors will not fit, and diffh's window is bounded by a constant (RANGE 30 lines)
 # where diff's storage is bounded by the input.  On a 28,672-word address space (../README.md

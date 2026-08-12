@@ -1,6 +1,6 @@
 # `col` carries eight bits, and v7's stole one of them
 
-`col` is one of task C5b's seven ([../TODO.md](../TODO.md)) and the one deliberate divergence
+`col` is one of task C5b's seven ([../README.md](../README.md)) and the one deliberate divergence
 in the task. [../README.md](../README.md) §10 allows a divergence and asks for it to be
 written down twice — in the source and in the manual page; this is the third place, on the
 model [../rev/README.md](../rev/README.md) set for task C5a's.
@@ -46,7 +46,7 @@ that survives review. `cmd_col_utf8` is the case that pins it.
 prefix is the precedent for: keep the Greek shift and move its bit out of the character into
 storage of its own beside `lbuff`. It was rejected because there is nothing on the other end
 of it. There is no Model 37 on this machine and no way to attach one; more to the point there
-is no *producer* — v7's `col` exists to filter `nroff`, and [../TODO.md](../TODO.md)'s
+is no *producer* — v7's `col` exists to filter `nroff`, and [../README.md](../README.md)'s
 exclusion table records that there is no `nroff` in this source tree at all, only `troff`,
 which drives a phototypesetter that does not exist either. Carrying a mechanism whose only
 effect here would be to corrupt real text, in service of a device nothing can produce input
@@ -60,7 +60,7 @@ than pending — and the day anything emits `c\bc` and `_\bc`, this `col` strips
 Greek shift is not coming back either way.
 
 **So this is the cut [`getty`](../getty/README.md) made to the speed table**, and the one
-[../TODO.md](../TODO.md) tells `stty` to make to its capability list when C6 comes: delete
+[../README.md](../README.md) tells `stty` to make to its capability list when C6 comes: delete
 what this hardware has not got, rather than keep a mechanism that can only get in the way of
 something real. The rule generalises past this program — **a v7 feature that steals a bit
 must be re-examined on a machine whose text uses that bit**, and the question to ask first is

@@ -161,7 +161,7 @@ obvious §2 saving. It is worth 0.3% of instructions and costs 800 words of text
 actually writes to.** v7's `printf` is kept, and the program is smaller for it.
 
 **On the disk** `dc` costs **32 blocks**, and the image went from 321 free to **289** — the largest
-single addition since the manual, and worth weighing against `../TODO.md` before the next one. The
+single addition since the manual, and worth weighing against `../README.md` before the next one. The
 manual page was already staged: `B6_STAGE_MAN` globs `cmd/*/*.umm` and `../../root.manifest` has
 carried `/usr/man/man1/dc.1` since long before there was a program.
 

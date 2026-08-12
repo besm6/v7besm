@@ -485,7 +485,7 @@ $ b6ld -o prog  crt0.o  main.o  libutil.a         # link against the library
 ## 11. On the machine itself
 
 Everything above describes the host tools `b6ar` and `b6ranlib`. Since task **C9d**
-([`cmd/TODO.md`](../cmd/TODO.md)) the same sources are also built for the BESM-6 and staged as
+([`cmd/README.md`](../cmd/README.md)) the same sources are also built for the BESM-6 and staged as
 **`/usr/bin/ar`** and **`/usr/bin/ranlib`**, so the machine maintains its own libraries: it
 builds `libc.a` — the archive and the `__.SYMDEF` index both — byte for byte identically to the
 host build. Two things are worth knowing about the target copies.

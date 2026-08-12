@@ -5,7 +5,7 @@
 //
 //      ps [ alx ] [ pid ]
 //
-// Task C8's fourth, and THE ONE THAT IS NOT A PORT.  ../TODO.md says so and this is the
+// Task C8's fourth, and THE ONE THAT IS NOT A PORT.  ../README.md says so and this is the
 // account of why.  v7's ps.c is 408 lines of which perhaps forty are the report; the rest
 // is a route to the data that has no counterpart here:
 //

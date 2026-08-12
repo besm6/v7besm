@@ -66,7 +66,7 @@ add_custom_target(icheck_fsimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/icheckimg.img
 # One damaged copy of the fixture, made at BUILD time rather than inside a test script.  A
 # case that only READS a broken filesystem needs no driver of its own, so this is what lets
 # the read-only cases below stay plain b6_progtest()s.  The targets are symbolic -- the
-# block and word offsets are b6fsutil's own tables' business, ../../TODO.md's rule -- but a
+# block and word offsets are b6fsutil's own tables' business, ../../README.md's rule -- but a
 # block NUMBER in a spec is this fixture's own layout and is a literal, exactly as
 # ../../fsck/test/dup.damage's is.
 #

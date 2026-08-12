@@ -15,8 +15,8 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 
 **The narrative lives in the per-directory READMEs, and that is where to look before touching
 anything**: `kernel/README.md` and `doc/Besm6_Kernel_Reference.md` (memory model, hardware
-rules), `cmd/README.md` (the porting
-recipe), `cmd/TODO.md`, and most `cmd/<prog>/`. Two things are external: the C
+rules), `cmd/README.md` (the porting recipe, the task numbers other files cite, and the table of
+what was refused), and most `cmd/<prog>/`. Two things are external: the C
 cross-compiler <https://github.com/besm6/c-compiler/>, supplying `libruntime.a`'s `b$*` helpers
 and the ten freestanding headers, and SIMH <https://github.com/besm6/simh/tree/master/BESM6/>.
 

@@ -7,7 +7,7 @@
 # (aout) library.
 #
 # The same sources are built a SECOND time, for the machine itself, into
-# build/rootfs/usr/bin/as -- see rootfs/, and task C9b in ../TODO.md.
+# build/rootfs/usr/bin/as -- see rootfs/, and task C9b in ../README.md.
 #
 # The assembler engine, split into a reusable library so it can be linked into
 # both the command-line tool and the unit tests.  uerror() is left undefined

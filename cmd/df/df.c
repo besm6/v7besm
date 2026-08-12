@@ -130,7 +130,7 @@
 
 #include "mtab.h"
 
-// What this file assumes of the layout, asserted rather than re-derived (../TODO.md,
+// What this file assumes of the layout, asserted rather than re-derived (../README.md,
 // task C4).  The headers carry the rest: sys/filsys.h asserts the superblock is exactly
 // one block, sys/fblk.h that a chain block fits inside one.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");

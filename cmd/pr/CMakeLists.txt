@@ -1,6 +1,6 @@
 # /bin/pr -- Unix v7 pr(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md), the eighteenth of the text filters and the last of the four
+# Task C5f (../README.md), the eighteenth of the text filters and the last of the four
 # "deciding" programs ../README.md §2 has been counting byte cursors in.  pr.c's header is
 # the account: the circular buffer up to 72 read cursors share, held as int offsets rather
 # than as `char *' because every one of those comparisons runs once per byte; the two

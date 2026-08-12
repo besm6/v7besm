@@ -15,7 +15,7 @@ that is where both came from — including the eighteenth block, which the estim
 
 ## This task began by overturning a refusal, which is the unusual part
 
-`mail` was not an open task. It was the first row of [TODO.md](TODO.md)'s *"Not ported, and why"*
+`mail` was not an open task. It was the first row of [../README.md](../README.md)'s *"Not ported, and why"*
 table, and the row gave three reasons and a fourth sentence that turned out to matter more than
 any of them. The table's own preamble is the licence: *"Each row is a decision that can be
 re-examined; the line count is there so it can be."*

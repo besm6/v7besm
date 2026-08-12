@@ -116,7 +116,7 @@ seventh time), so the `-` form is asserted under the booted kernel and nowhere e
 
 ## Why `diffh` is ported rather than dropped
 
-[../TODO.md](../TODO.md) offered the choice and the argument for porting is not completeness.
+[../README.md](../README.md) offered the choice and the argument for porting is not completeness.
 `diff` holds both files in core — one `struct line` per line plus three integer vectors over
 them, about `6n` words — and when `malloc` fails it prints **`files too big, try -h`**.
 `diffh`'s window is bounded by a *constant*: `RANGE` is 30 lines of each file, resynchronised

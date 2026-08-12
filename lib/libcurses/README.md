@@ -345,4 +345,4 @@ kernel; and `initscr()`'s `isatty()` search, for the same reason.
 this port does not do. **Nothing installs it** — no `CMakeLists.txt` in this tree has a man
 rule yet, which is also true of `../libtermcap/termcap.3.umm` — but it is staged onto the image
 by the top-level `B6_STAGE_MAN` glob, where manview(1)
-([`../../cmd/TODO.md`](../../cmd/TODO.md) C25a) formats it.
+([`../../cmd/README.md`](../../cmd/README.md) C25a) formats it.

@@ -5,7 +5,7 @@
 # archives.  The fget*/fput*/get*/put* helpers it needs come from cmd/libaout (aout).
 #
 # The same sources are built a SECOND time, for the machine itself, into
-# build/rootfs/usr/bin/ar -- see rootfs/, and task C9d in ../TODO.md.  The
+# build/rootfs/usr/bin/ar -- see rootfs/, and task C9d in ../README.md.  The
 # archiver library below is linked into the native ranlib as well, exactly as it
 # is into b6ranlib here.
 #

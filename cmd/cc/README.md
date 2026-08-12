@@ -5,7 +5,7 @@ compiler itself — a modern C11 rewrite of the Unix v7 `cc(1)` driver that chai
 one sub-tool per stage.
 
 **One source, two programs.** The same `cc.c` is built as the host tool `b6cc` and as the
-machine's own `/usr/bin/cc` (task C9e, [../TODO.md](../TODO.md)). Where this page says
+machine's own `/usr/bin/cc` (task C9e, [../README.md](../README.md)). Where this page says
 `b6cpp`, `~/.local/bin` or `share/besm6/lib`, the native build reads `cpp`, `/usr/bin` and
 `/lib`; "Building for the BESM-6" below is the whole of the difference, and the one thing
 the machine cannot do.
@@ -116,7 +116,7 @@ test suite is [test/cc_test.cpp](test/cc_test.cpp), run by `make run`.
 ## Building for the BESM-6
 
 `cc` is also built **natively**, into `build/rootfs/usr/bin/cc` and onto the disk image —
-task **C9e** of [../TODO.md](../TODO.md), the last of C9 and the driver that runs everything
+task **C9e** of [../README.md](../README.md), the last of C9 and the driver that runs everything
 the other ten tasks put there. [rootfs/CMakeLists.txt](rootfs/CMakeLists.txt) is the whole of
 the build machinery; there is no second copy of the source and no `#ifdef` outside the one
 profile at the head of [cc.c](cc.c).

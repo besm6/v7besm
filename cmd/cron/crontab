@@ -12,7 +12,7 @@
 # v7 HAD THREE LINES AND ONE IS COMMENTED OUT:
 #
 #   dmesg wants a /usr/adm that root.manifest deliberately has not got -- the same
-#   directory process accounting was refused for in cmd/TODO.md.  Note also that v7's
+#   directory process accounting was refused for in cmd/README.md.  Note also that v7's
 #   form is wrong here twice more: this image keeps the program in /bin (task C8), and
 #   its `-' flag is gone with the /usr/adm/msgbuf machinery, cmd/dmesg being main(void).
 #   So the line to restore is `/bin/dmesg >>/usr/adm/messages', not v7's.

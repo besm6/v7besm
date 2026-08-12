@@ -1,6 +1,6 @@
 # /bin/su -- Unix v7 su(1), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md).  SETUID ROOT, and cmd/login named it a task in advance: v7's login(1)
+# Task C6 (../README.md).  SETUID ROOT, and cmd/login named it a task in advance: v7's login(1)
 # page claims login "may be used at any time to change from one user to another", that use
 # needs the bit, and this is the command for it.  ../login/CMakeLists.txt says the same from
 # its end -- login is NOT setuid because its privilege is inherited from getty, and opening

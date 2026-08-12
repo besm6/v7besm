@@ -5,7 +5,7 @@
 //
 //      od [ -bcdhowx ] [ file ] [ [ + ] offset[.][b] ]
 //
-// One of task C5b's seven (../TODO.md), and the one that had to be DESIGNED rather than
+// One of task C5b's seven (../README.md), and the one that had to be DESIGNED rather than
 // ported: od's whole job is printing machine words, and a machine word here is 48 bits where
 // v7's was 16.  README.md beside it is the account; the short form is here.
 //
@@ -20,7 +20,7 @@
 //      -b          3 octal per byte    unchanged
 //      -c          character           unchanged
 //
-// -w IS A NEW NAME FOR -o AND NOT A NEW FORMAT, which is what ../TODO.md asked for when it
+// -w IS A NEW NAME FOR -o AND NOT A NEW FORMAT, which is what ../README.md asked for when it
 // said this machine wants `a -w word dump in 16 octal digits, beside the byte formats'.  It
 // is a synonym because the alternative -- making -o mean something byte-sized and -w the word
 // -- would have been the one change that really did redefine a v7 flag.  The default stays

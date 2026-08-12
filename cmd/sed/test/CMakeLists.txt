@@ -28,7 +28,7 @@
 #
 # Every other case agrees byte for byte with an implementation that shares no line with
 # this one, which is worth more than the next ten hand-written cases -- grep/README.md's
-# closing finding, pointed at sed as ../TODO.md asked.
+# closing finding, pointed at sed as ../README.md asked.
 
 set(SED_FIXTURES
     # the corpora

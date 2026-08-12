@@ -13,7 +13,7 @@ image**: the first program that outlives the shell that started it.
 
 ## The line in `/etc/rc` cannot leave two copies running
 
-[`../TODO.md`](../TODO.md) warned that it could, and the warning was wrong. It is true that
+[`../README.md`](../README.md) warned that it could, and the warning was wrong. It is true that
 `/etc/rc` runs on **every** pass through init's loop rather than once per boot — but the loop is
 
 ```c

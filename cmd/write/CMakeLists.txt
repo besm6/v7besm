@@ -1,6 +1,6 @@
 # /bin/write -- Unix v7 write(1), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md), and the first program on this image to open a terminal it does not
+# Task C6 (../README.md), and the first program on this image to open a terminal it does not
 # own.  It reads /etc/utmp for the recipient's line, opens /dev/<line>, and copies its
 # standard input there until end-of-file.
 #

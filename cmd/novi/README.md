@@ -173,7 +173,7 @@ multi-byte arrow keys. A third test born disabled asserts nothing and costs a vo
 and a `simh_boot` lock slot. **`novi`'s interactive half goes in with the re-enabling of
 `console` and `edit`, not before**, and task 35 is where that is recorded.
 
-**Two other things are left open, neither a task in [../TODO.md](../TODO.md).** `novi` writes
+**Two other things are left open, neither a task in [../README.md](../README.md).** `novi` writes
 hard-coded ANSI and has **no `termcap`**, so a terminal that is not ANSI cannot use it — and
 **the blocker is gone**: `b6_prog()` has the `LIBS` keyword
 [../../lib/libcurses/README.md](../../lib/libcurses/README.md) predicted, and

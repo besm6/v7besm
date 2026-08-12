@@ -5,7 +5,7 @@
 //
 //      tr [ -cds ] [ string1 [ string2 ] ]
 //
-// One of task C5b's seven (../TODO.md), and the cheapest of them: v7's tr is EIGHT-BIT CLEAN
+// One of task C5b's seven (../README.md), and the cheapest of them: v7's tr is EIGHT-BIT CLEAN
 // ALREADY and is the only program in the set that is.  Its three tables are `[256]' as v7
 // wrote them (§11 asks for exactly that and finds it), and seven of the eight `&0377' masks
 // scattered over them are therefore no-ops rather than the bugs the same expression is

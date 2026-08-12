@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two lexes built from one source must generate the same scanner.  Task C10d,
-# ../../../TODO.md; ../../README.md, "Testing the native build", has the argument.
+# ../../../README.md; ../../README.md, "Testing the native build", has the argument.
 # Invoked by ctest as:
 #
 #	run-lex-test.sh HOSTLEX SIM PROG NCFORM SRCDIR NAME SCANNER [flags...]

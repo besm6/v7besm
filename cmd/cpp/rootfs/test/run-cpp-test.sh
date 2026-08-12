@@ -1,5 +1,5 @@
 #!/bin/sh
-# Two cpps built from one source must agree byte for byte.  Task C9a, ../TODO.md SS5.
+# Two cpps built from one source must agree byte for byte.  Task C9a, ../README.md SS5.
 # Invoked by ctest as:
 #
 #	run-cpp-test.sh HOSTCPP SIM PROG SRCDIR NAME [args...]

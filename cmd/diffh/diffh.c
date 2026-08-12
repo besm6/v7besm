@@ -9,7 +9,7 @@
 // diff reads both files whole, hashes every line and builds three integer vectors over them,
 // and when malloc fails it says `files too big, try -h' and stops.  On a PDP-11 that took a
 // large pair of files; here the whole user address space is 28,672 words (../README.md §6),
-// so it is nearer than it was and -h matters more, not less.  ../TODO.md put the choice
+// so it is nearer than it was and -h matters more, not less.  ../README.md put the choice
 // -- port this or drop -h -- and it is ported.
 //
 // diff -h REPLACES ITSELF with execv("/usr/lib/diffh", args), passing its own argv including

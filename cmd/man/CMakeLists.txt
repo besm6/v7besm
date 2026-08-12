@@ -1,6 +1,6 @@
 #
 # /usr/bin/man -- 4.3BSD's man(1), and the first program on this image that reads /usr/man.
-# Task C25b (../TODO.md).
+# Task C25b (../README.md).
 #
 # v7 HAD a man and this is not it: v7's is a shell script around nroff, and there is no
 # nroff on this machine and never will be.  The source is RetroBSD's src/cmd/man/man.c,

@@ -5,7 +5,7 @@ Task C25a. Two hundred manual pages have been on this image since the manual wen
 
 The source is nobody's: v7 had no renderer for this dialect because it had no dialect, and its
 own answer — `nroff` — is not in the v7 source tree at all and is refused along with the whole
-typesetting suite in [`../TODO.md`](../TODO.md). What this was written *from* is
+typesetting suite in [`../README.md`](../README.md). What this was written *from* is
 [`../man2umm/ummread.cpp`](../man2umm/ummread.cpp), which says in its own header that a renderer
 links it and adds a back end.
 

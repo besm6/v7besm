@@ -5,7 +5,7 @@
 //
 //      join [ -an ] [ -e s ] [ -jn m ] [ -o list ] [ -tc ] file1 file2
 //
-// One of task C5f's seven (../TODO.md).  No §2 -- not a pointer relational in the file -- no
+// One of task C5f's seven (../README.md).  No §2 -- not a pointer relational in the file -- no
 // `%D', and the two `long's are file offsets and are one word here.  What it had was three
 // unbounded reads and one that could not be bounded at all.
 //

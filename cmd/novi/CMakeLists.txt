@@ -1,5 +1,5 @@
 # /bin/novi -- a full-screen editor by Dave W Plummer, written for 2.11BSD on a split-I/D
-# PDP-11 (https://x.com/davepl1968/status/2080867382105710812).  Task C12 (../TODO.md).
+# PDP-11 (https://x.com/davepl1968/status/2080867382105710812).  Task C12 (../README.md).
 #
 # THE FIRST PROGRAM IN cmd/ THAT IS NOT A PORT OF A v7 COMMAND.  Everything else here
 # started life in the v7 source tree and the work was carrying it to a 48-bit word-addressed

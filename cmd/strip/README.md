@@ -30,7 +30,7 @@ stops at the first one rather than going on to the next argument. `SIGHUP`, `SIG
 
 These same sources — plus the `cmd/libaout` files `strip` calls — are built a **second** time,
 by the `b6*` cross toolchain, into `build/rootfs/usr/bin/strip`: task **C9c** in
-[../TODO.md](../TODO.md), with [`../nm`](../nm), [`../size`](../size) and
+[../README.md](../README.md), with [`../nm`](../nm), [`../size`](../size) and
 [`../disasm`](../disasm). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build
 machinery, and there is **no second copy of any source**.
 

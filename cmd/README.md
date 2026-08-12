@@ -8,22 +8,24 @@
 * **native BESM-6 programs** — the v7 commands that go on the disk image, built by the `b6*`
   toolchain and staged into `build/rootfs/`.
 
-**This file is the manual for the second kind.** [TODO.md](TODO.md) beside it is the work plan.
-Read [sh/README.md](sh/README.md) (the largest port there has been) and [ls/README.md](ls/README.md)
-first; everything below is written on top of both.
+**This file is the manual for the second kind**, and since the work plan beside it emptied and was
+deleted it is also the record of what was decided: the porting recipe, the task numbers other
+files cite, and the table of what was refused and why. Read [sh/README.md](sh/README.md) (the
+largest port there has been) and [ls/README.md](ls/README.md) first; everything below is written
+on top of both.
 
 ## The sources are already here
 
-**Almost every program named by [TODO.md](TODO.md) is in this directory**, one directory per
-program — the source, its auxiliary files and its manual page. Everything not yet ported is a
-**verbatim upstream copy**, so the first diff on it is the porting diff. Such a task starts by
-writing a `CMakeLists.txt`, not by fetching anything.
+**Almost every program this port ever considered is in this directory**, one directory per
+program — the source, its auxiliary files and its manual page. Anything not ported is a
+**verbatim upstream copy**, so the first diff on it would be the porting diff, and a task that
+took one up would start by writing a `CMakeLists.txt` rather than by fetching anything.
 
 They came from `tmp/v7x86-0.8a/usr/src/cmd/`, an unpacked reference tree that is **not in the
 repository** (`tmp/` is git-ignored). **Five directories are the exception.** Two have no v7
 original behind them at all: [novi/](novi/), Dave W Plummer's full-screen editor for 2.11BSD, and
 [more/](more/), Berkeley's pager by way of RetroBSD — v7 had neither an editor of that kind nor a
-pager. They are the two tasks in [TODO.md](TODO.md) with a number and no table row. The third is
+pager. They are C12 and C27, the two task numbers below that name no v7 command. The third is
 [man/](man/), and it is a different case: v7 *had* a `man`, but it is a shell script around
 `nroff` and there is no `nroff` here, so the source is Berkeley's 1987 C rewrite by way of
 RetroBSD and the reference tree's copy was not used.
@@ -63,8 +65,7 @@ Notes on the copies:
 
 ## The porting recipe
 
-Twelve things that are true of **every** port, collected here so that no task in
-[TODO.md](TODO.md) has to repeat them.
+Twelve things that are true of **every** port, collected here so that no task had to repeat them.
 
 ### 1. The C11 pass, which is mechanical
 
@@ -213,16 +214,29 @@ number, not for the loop.
   to file scope**, where an index register reaches them at any size. [cpp/README.md](cpp/README.md)
   is the worked example — `struct cppstate` was ~38,630 words and is ~400 with its four arrays
   lifted out.
-* **4,096 words of stack** at `070000`. **Nothing checks this.** One big automatic array blows it
+* **4,096 words of stack** at `070000`. **Nothing checks this**, and the overflow does not fault:
+  a user address is 15 bits and the process owns all 32 pages, so a store past `077777` **wraps
+  mod 2^15 onto word 0** and rewrites the program's own const image. What comes back is a garbled
+  message, a table that reads as something else, or a signal from a place that makes no sense —
+  never a diagnostic. **And the argv/envp block sits at the base of that same stack** (`argc` is
+  at absolute `070000`, [../kernel/sys1.c](../kernel/sys1.c)), so a program has several hundred
+  words less under a login shell's environment than under a test harness's `env -i`: `sh` passed
+  every test in the tree and died on the machine for exactly that reason (task C29). Padding the
+  environment reproduces such a thing on the host, and `b6sim -d` measures it —
+  `grep -o 'M17 = [0-7]*' trace | sort -u | tail -1`, less `070000`, is the peak.
+  One big automatic array blows the budget
   in silence, and so does a modest one multiplied by a recursion. Read the prologue (`15 utm 0NNN`
   in the `.dis` `b6_prog()` writes) rather than estimating the frame, and bound every fixed path
   buffer v7 filled with an unbounded `sprintf`/`strcpy` from `argv`. **Scalars are not free**:
   every distinct compiler temporary is a permanent frame slot, so a long function costs 1.5–2
   words per source line with no arrays at all — `sed`'s `fcomp` is 700. The three moves that pay
   are (a) big scratch to the heap when the function recurses, (b) `static` when it does not, and
-  (c) splitting a long function that stays resident: `cpp`'s `main` went 531 → 41 words that way.
+  (c) splitting a long function that stays resident: `cpp`'s `main` went 531 → 41 words that way,
+  and `sh`'s `execute()` 402 → 99, which is the difference between a script nesting eight levels
+  deep and sixteen ([sh/README.md](sh/README.md), "The stack"). **A switch pays for every arm on
+  every call**, which is what both of those were.
   **And a recursion whose depth the input chooses needs a ceiling of its own** — `grep`'s
-  `MAXDEPTH`, `cpp`'s `MAXARGDEPTH`. **Sometimes no ceiling will do**: `lex`'s parse-tree walk is
+  `MAXDEPTH`, `cpp`'s `MAXARGDEPTH`, `sh`'s `deepchk()`. **Sometimes no ceiling will do**: `lex`'s parse-tree walk is
   as deep as the file has rules, and `awk.lx.l` alone wants 96 frames, so any ceiling that admits
   the one scanner this machine must compile already overflows. That walk is **iterative**, with an
   explicit worklist in bss ([lex/README.md](lex/README.md), "Walking the tree") — and note how it
@@ -240,7 +254,7 @@ number, not for the loop.
 
 `b6_prog()` registers `check-size.sh` for the first two as ctest `rootfs_<name>_size`. For scale:
 `ld` is 23,951 words and `cpp` 23,826, the two largest things on the image; `fgrep` is 20,019,
-and 15,000 of them are two arrays; `as` is 19,824, `sed` 14,120, `fsck` 10,842, `sh` 7,928,
+and 15,000 of them are two arrays; `as` is 19,824, `sed` 14,120, `fsck` 10,842, `sh` 9,008,
 `sort` 6,822. **The three toolchain programs are where the ceilings really bind** — each carries
 a `besm6` size profile, and `cpp`'s is below what C11 asks for
 ([cpp/README.md](cpp/README.md), [as/README.md](as/README.md), [ld/README.md](ld/README.md)). **What a program prints with dominates what it
@@ -316,8 +330,7 @@ the other end of the range and the cheapest thing here: **1 block**, 152 words, 
 number: what is left below the stack after its image is the whole of its heap
 ([awk/README.md](awk/README.md)).
 The whole of `/usr/man` is 302 blocks, `man` 12 and
-`manview` 17. That is room for a
-good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large
+`manview` 17. That is room for a good deal, but it is not room for anything: weigh a large
 addition against it rather than assuming. The number is printed by `b6fsutil` every time
 `root.img` is built, so it is measured and not estimated — **and the running total above is the
 one that drifts**: task C22 measured the pre-C22 image at 168 where this line had said 169, an
@@ -532,11 +545,91 @@ The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/d
 
 ---
 
+## Task numbers, and what a task had to do
+
+There was a `TODO.md` beside this file, and it is gone: the work plan it held is empty, everything
+that could be ported has been, and what it carried that outlives it is here — the numbering rules
+and the table below. **The next task is C30.**
+
+**Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
+source comments and from `doc/`, and a bare number would be ambiguous forever after. **No number
+is ever re-used**, because `CMakeLists.txt` headers, `root.manifest` stanzas and per-program
+`README.md`s cite them by the hundred: C1 through C11, C13 through C24, C26, C28 and C29 are
+spent. Three of them name no program in this file and are written down here for that reason:
+
+* **C12 is [novi/](novi/)** and **C27 is [more/](more/)** — the two programs here that are not
+  ports of a v7 command, v7 having had neither a full-screen editor nor a pager. `egrep` held C12
+  for a while by mistake and is C26.
+* **C25 is the manual**, in three parts cited from about twenty files: **C25a is
+  [manview/](manview/)**, the renderer that `man(1)` runs over a page; **C25b is [man/](man/)**,
+  which finds the page; **C25c was the standing procedure**, which is §10 above and
+  [man2umm/README.md](man2umm/README.md) now — [man2umm/](man2umm/) is *not* retired, and any
+  program that ever arrives here arrives with a roff page. `manview` is this tree's third program
+  that is not a port of a v7 command, `nroff` being refused below with the typesetting suite.
+
+**The contract a task met**, and the one a later one should: it leaves `make` building and `ctest`
+passing, and it leaves the program **on the image** — staged into `build/rootfs/`, named in
+[../root.manifest](../root.manifest), and asserted by a test. **A port is not done when it
+compiles.** One task was one program, and they were ordered so that each was unblocked by the one
+before it; C29, the last, obeyed neither rule, being a defect in a program already ported.
+
+## Not ported, and why
+
+**Every row is a decision that can be re-examined, not a closed door** — task C28 opened the first
+row and ported `mail`. The line counts are there so a row can be re-costed; **the sentences are
+what want re-reading**, because a reason expires when the machine moves under it and nothing
+notices on its own.
+
+| | lines | why not |
+|---|---|---|
+| `xsend/` | 414 | Secret mail. **Its stated reason expired with task C28**, which ported `mail` — the row used to read "needs `mail` first" — so here is one of its own: **the source is not in this tree at all**, there being no `xsend/` directory to port, and what it adds to `mail` is a public-key scheme whose `enroll`/`xget` half is equally absent. It is new work rather than a port, and nothing asks for it: [`crypt/`](crypt/) already carries this image's encryption and `mail` now carries its delivery. |
+| `troff/`, `eqn/`, `neqn/`, `tbl/`, `refer/`, `deroff.c`, `prep/`, `checkeq.c`, `ptx.c`, `spell/` | 8,266 + 1,726 + 1,677 + 2,434 + 4,874 + 496 + 589 + 101 + 553 + 625 | The typesetting suite. `troff` drives a CAT phototypesetter that does not exist, and there was never an `nroff` in this source tree to begin with. **The refusal is stronger than it was: there is nothing left here for either to typeset.** This repo's manual pages are in the dialect [../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and [manview/](manview/) displays them. `spell` additionally needs its whole word list. |
+| `tp/`, `dump.c`, `restor.c`, `dumpdir.c` | 800 + 641 + 1,150 + 475 | Tape. **This kernel has no tape driver** and no `bdevsw`/`cdevsw` row for one, and all four are built around a tape's sequential access rather than merely willing to use it — `dump`/`restor` are a filesystem-level backup pair whose whole design is the reel. `tp` is the pre-`tar` archiver and is superseded by it in any case. If a magnetic-tape driver is ever written (a kernel task nobody has raised; [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) is the reference), reconsider `dump`/`restor` and not the other two. |
+| `uucp/`, `cu.c` | 6,415 + 541 | Dial-out over a modem link nothing models. `cu` becomes conceivable only if the machine's serial multiplexor is ever driven and wired to something outside; no kernel task proposes that. |
+| `lpr/`, `vpr.c` | 1,315 + 334 | Printer spooling. **Worth revisiting:** SIMH *does* model the АЦПУ drum printer, so `lpr` becomes a small task the day a kernel printer driver exists — which is a kernel task nobody has written yet. |
+| `graph.c`, `plot/`, `spline.c`, `tc.c`, `tk.c` | 695 + 608 + 335 + 638 + 250 | Plotters and Tektronix terminals; no hardware, and the output would go nowhere. |
+| `learn/` | 1,066 | Needs the entire `/usr/lib/learn` lesson corpus, which is not in this tree. |
+| `adb/` | 3,547 | PDP-11 instruction decoding, PDP-11 core files, PDP-11 `ptrace` semantics. A BESM-6 debugger is **new work**, not a port — and [disasm/](disasm/) plus `ptrace(2)` is where it would start. `ptrace`'s single-step, request 9, is **refused with `EIO`** on this machine: what it would take, and the breakpoint contract to settle before writing any of it, is the bullet in [../doc/Besm6_Kernel_Reference.md](../doc/Besm6_Kernel_Reference.md) under "Known consequences, accepted". |
+| `lint/`, `mip/`, `struct/`, `ratfor/` | 1,164 + 7,615 + 4,721 + 1,200 | `lint` and `mip` are the PDP-11 C compiler's own internals; `struct`/`ratfor` are Fortran-to-Ratfor tooling with no Fortran here — which is also why C10b dropped lex's `nrform`. |
+| `osh.c` | 846 | The pre-Bourne shell. [sh/](sh/) supersedes it. |
+| `mknod.c` | 44 | **There is no `mknod(2)` in this kernel.** Every device node on the image is made by `b6fsutil` from [../root.manifest](../root.manifest), which is where a new one is added; a program that can only fail is worse than no program. Reconsider only if the gate is ever written. |
+| `prof.c` | 310 | Reads a `mon.out` that nothing produces, and nothing will: the kernel decided against profiling, so `profil(2)` **refuses** with `EINVAL` (`../doc/Besm6_Kernel_Reference.md`, "Known consequences, accepted"), there is no `monitor`/`mcount` in libc, and `cc` has no `-p`. Reconsider only as the last step of porting all four; `b6sim` profiles a program today with no kernel help. |
+| `cb.c`, `diff3.c`, `tabs.c` | 366 + 423 + 196 | Curiosities with a real cost and no caller. `cb` is a C beautifier superseded by this repo's own clang-format; `diff3` wants three files and a merge nobody does here; `tabs` sets hardware tab stops on terminals this machine does not have — the Consul typewriter is not one of them. |
+| `cc.c`, `as/`, `ld.c`, `nm.c`, `ar.c`, `size.c`, `strip.c`, `ranlib.c`, `arcv.c` | | PDP-11 `a.out`, PDP-11 opcodes and PDP-11 registers; nothing in them survives retargeting. The BESM-6 tools were written for this repo instead, and task C9 built every one of them a second time for the machine itself — see each tool's "Building for the BESM-6". |
+| `ac.c`, `sa.c`, `accton.c` | 251 + 489 + 16 | Process accounting. The kernel side EXISTS and works — `acct(2)` is a real gate ([../kernel/acct.c](../kernel/acct.c), `<sys/acct.h>`), which is what makes this a decision rather than a gap. Nothing needs it: the machine has one operator, there is nobody to bill, and `sa`'s whole subject is digesting a record nothing on this image writes. It would also want a `/usr/adm` that [../root.manifest](../root.manifest) does not have, and a boot-time `accton` line in [../etc/rc](../etc/rc), which `kernel/test/multi` could assert since C20 but has nothing to assert about. Reconsider if this machine ever has more than one user who matters. |
+| `random.c`, `sp.c` … | | Curiosities. Port one if it is ever wanted; none is on a path to anything. |
+
+---
+
 ## What the finished tasks settled
 
-One paragraph per finished task, newest first, kept here rather than in [TODO.md](TODO.md)
-because a work plan should shrink as it is worked and this does not. Each points at the port's
-own `README.md` for the detail; what is here is the part a *later* port needs to know.
+One paragraph per finished task, newest first. It was kept here rather than in the work plan
+because a plan should shrink as it is worked and this does not — which is why the plan could be
+deleted and this could not. Each points at the port's own `README.md` for the detail; what is here
+is the part a *later* port needs to know.
+
+C29 was not a port: it was the defect C23 found, and `/bin/sh` has run every shape of script since.
+`execute()` reserved 402 words of frame on **every** recursion over the parse tree, so eight levels
+of nesting was the whole 4,096-word machine stack, and the ninth did not fault — it wrapped mod
+2^15 onto word 0 and rewrote the shell's own const image. Three things it settled
+([sh/README.md](sh/README.md), "The stack, and what a nested script costs"):
+
+* **A switch pays for every arm on every call.** Splitting `execute()`'s four big arms into a
+  function each — the code inside them unchanged — took the resident frame to 99 words and the
+  ceiling to sixteen levels, for +9 words of image. §6 already said to split a long resident
+  function; what this adds is that **the arm you are not in costs exactly as much as the one you
+  are**, so a big `switch` inside a recursion is the shape to look for.
+* **A test harness's environment is part of the measurement.** The argv/envp block sits at the
+  base of the same stack, so `env -i` under `b6sim` bought several hundred words that a login
+  shell on the machine does not have. This script passed every test in the tree and died on the
+  machine. **Padding the environment is how to bring such a thing back onto the host** — two
+  whitelisted variables and a thousand bytes did it — and `b6sim -d`'s trace of `M17` is how to
+  measure the peak.
+* **Two "unexplained corners" were one bug.** The `case`-round-a-pipeline crash and task C8's
+  `SIGNAL 4` on four pipeline stages inside a command substitution were the same stack, four
+  years of README apart. **Where two corners share a shape — every ingredient works alone, one
+  more level does not, and no diagnostic comes out — suspect one cause and measure before
+  bisecting further.**
 
 C24 took the last seven hand-rolled directory readers over `opendir(3)` — `du`, `find`, `rm`,
 `rmdir`, `pwd`, `tar` and `sh/expand.c`, six blocks, no new program — so that §5 is now a
@@ -570,7 +663,7 @@ settled:
   `closedir()`/`opendir()` pair. That also bounds the **heap**, which is new: a `DIR` costs twelve
   words plus a buffer capped at one filesystem block, and without the budget a deep tree holds one
   per level. `rm` and `tar`, which were already `NOFILE`-bounded, simply kept their per-level hold.
-* **A task list can be wrong about its own scope.** [TODO.md](TODO.md) named eight programs and
+* **A task list can be wrong about its own scope.** The task named eight programs and
   eight non-candidates. `mv` reads no directory at all — its `<sys/dir.h>` was carried for one use
   of `DIRSIZ`, which lives in `<sys/param.h>` — and `df`, `icheck` and `quot` never included the
   header. Seven and five are the real numbers. **Check the grep before trusting the list**, and
@@ -580,14 +673,15 @@ C23 put `calendar(1)` on the image — forty-two blocks, of which twenty-nine ar
 and finished by opening a task rather than closing one. Four things it settled
 ([calendar/README.md](calendar/README.md)):
 
-* **`case` corrupts this shell when its arm holds a `while` and a pipeline**, which is C29 in
-  [TODO.md](TODO.md) and is the first defect this file has had to record in a program that was
-  already ported and already tested. What a later port needs is the second half of it: **no case
-  in [sh/test/](sh/test/) contains a pipeline**, because that suite runs under `b6sim` where
-  nothing can be `exec`'d, so the shell is covered for syntax and not for what syntax *runs*. A
-  script that misbehaves on this machine is not automatically the script's fault, and the way to
-  find out is to type its constructs one at a time at a live prompt — §9's "which world a test
-  runs in", applied to debugging rather than to testing.
+* **`case` corrupted this shell when its arm held a `while` and a pipeline** — the first defect
+  this file had to record in a program that was already ported and already tested, and C29 above
+  is what it turned out to be. What a later port needs is the half that was right at the time:
+  **a script that misbehaves on this machine is not automatically the script's fault**, and the
+  way to find out is to type its constructs one at a time at a live prompt. C23 did that and its
+  bisection table is what made the fix findable. Its other half was wrong and is worth knowing as
+  a wrong turn: the suite was thought unable to reach the bug because `b6sim` could not run a
+  pipeline, and `b6sim` can — what it could not reproduce was the *environment*, which is a
+  different thing to check for.
 * **A shipped data file can disagree with the program that reads it, silently and by one
   character.** v7's generator tolerated a leading zero on the day of the month and not on the
   month, and every line of the database is `01/06`: for nine months of the year the program
@@ -606,8 +700,8 @@ and finished by opening a task rather than closing one. Four things it settled
   produce (`CAL'OK'` typed, `CALOK` matched).
 
 C28 put `/bin/mail` on the image, eighteen blocks, and it is the first task here that began by
-**overturning a row of [TODO.md](TODO.md)'s "Not ported, and why" table** rather than by taking one
-of its open numbers. Four things it settled ([mail/README.md](mail/README.md)):
+**overturning a row of the "Not ported, and why" table above** rather than by taking one of the
+plan's open numbers. Four things it settled ([mail/README.md](mail/README.md)):
 
 * **A refusal is a claim about the machine, and the machine moves under it.** Three of the row's
   four reasons were still true and cost a `dir` stanza between them; the fourth — *"there is one
@@ -700,7 +794,7 @@ has not got", and two-thirds of that sentence was wrong
 
 The rule to carry is the shape of the mistake rather than the clock: **a blocker that names a
 mechanism should be checked against the mechanism before it is inherited.** This one had been
-copied into `cmd/TODO.md`, `etc/rc` and `kernel/test/CMakeLists.txt`, and three tasks waited on
+copied into the work plan, `etc/rc` and `kernel/test/CMakeLists.txt`, and three tasks waited on
 it.
 
 The port itself turned on one line. v7 names each spool file with `%02d` of `tm_year`, which is

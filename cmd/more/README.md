@@ -1,7 +1,7 @@
 # more
 
 Task C27. Not a port of a v7 command — v7 had no pager — so, like [`novi`](../novi/), it has a
-number and no section in [`../TODO.md`](../TODO.md). The source is RetroBSD's
+number and no section in [`../README.md`](../README.md). The source is RetroBSD's
 `src/cmd/more/more.c`, Eric Shienbrood's by way of Berkeley. `/bin/less` is a hard link to it.
 
 ## The terminal database

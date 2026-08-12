@@ -20,7 +20,7 @@
 #      is silent, and this port did not invent a banner for it.
 #   3. `b6fsutil -c -v' must SUCCEED afterwards.  The host's checker is a separate
 #      implementation in C++ that shares no line with the guest, so this is the "require
-#      both to report the same thing" of ../../TODO.md.
+#      both to report the same thing" of ../../README.md.
 #   4. icheck run again finds `missing    0' and a free count equal to the host's, converted
 #      by KBPB.  A salvage that lost blocks would still pass 3.
 #   5. fsck(1M) -- the OTHER free-list rebuilder on this image -- reads what icheck wrote and
@@ -36,7 +36,7 @@
 # WHAT THIS STILL CANNOT SAY is ../../df/README.md's warning unchanged: b6sim's read(2) and
 # write(2) are the host's, so none of the five conditions of the raw path exists here.
 # Everything green in this directory says the ARITHMETIC is right and nothing whatever about
-# the device.  Task C4e has no SIMH test -- see ../../TODO.md -- so for these four programs
+# the device.  Task C4e has no SIMH test -- see ../../README.md -- so for these four programs
 # that half is not asserted anywhere yet.
 #
 set -e
@@ -59,7 +59,7 @@ cp "$fixture" "$alt"
 
 # The damage.  One spec per line, comments and blank lines skipped, so a .damage file can
 # say why.  b6fsutil -D resolves the field names itself -- no test script here computes a
-# block or a word offset, which is ../../TODO.md's rule for on-disk constants.
+# block or a word offset, which is ../../README.md's rule for on-disk constants.
 specs=$(grep -v '^[ 	]*#' "$srcdir/$case.damage" | grep -v '^[ 	]*$')
 for spec in $specs; do
     "$b6fsutil" -D "$spec" "$img"

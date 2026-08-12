@@ -8,11 +8,11 @@
 //
 // Task C8's fifth and widest.  It is the heaviest reader of kernel/kctl.c -- eleven of the
 // table's rows name this program -- and it is a rewrite rather than a port, for the reason
-// ../TODO.md gives: v7's pstat is 385 lines tied to PDP-11 structures, and the parts of it
+// ../README.md gives: v7's pstat is 385 lines tied to PDP-11 structures, and the parts of it
 // that are not the report are the parts that do not survive.
 //
 // EVERY TABLE COMES THROUGH kctl(2), WHICH IS UNPRIVILEGED, and that is a correction to what
-// ../TODO.md says.  The brief lumps this program in with ps as "root and only root"; that is
+// ../README.md says.  The brief lumps this program in with ps as "root and only root"; that is
 // true of ps, whose u-area has to come off a memory device, and it is true HERE ONLY OF -u.
 // The inode, file, text, proc, mount and terminal tables and the two allocation maps are all
 // KCTL_GET, so seven of the eight modes work for anybody.  -u opens /dev/kmem and /dev/mem,

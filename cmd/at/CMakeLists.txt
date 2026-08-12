@@ -1,4 +1,4 @@
-# /bin/at -- Unix v7 at(1).  Task C21 (../TODO.md); ./README.md is the account.
+# /bin/at -- Unix v7 at(1).  Task C21 (../README.md); ./README.md is the account.
 #
 # NOT SETUID (../README.md §8), and it matters more here than usual: the spool copy is owned
 # by whoever ran at, and that ownership is how ../atrun recovers the uid to run the job

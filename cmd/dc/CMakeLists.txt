@@ -1,4 +1,4 @@
-# /bin/dc -- Unix v7 dc(1), the arbitrary-precision desk calculator.  Task C15 (../TODO.md),
+# /bin/dc -- Unix v7 dc(1), the arbitrary-precision desk calculator.  Task C15 (../README.md),
 # and the engine C16's bc(1) drives.  ./README.md is the account.
 #
 # THE §1 BUILD BLIND SPOT APPLIES HERE, unlike expr and m4, which have no header of their own:

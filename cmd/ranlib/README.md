@@ -37,7 +37,7 @@ out. `Ranlib.UnknownFlag` in [`test/`](test) is the case that could not be writt
 
 These same sources — plus **all five of [`../ar`](../ar)'s engine files** and the `cmd/libaout`
 files both call — are built a **second** time, by the `b6*` cross toolchain, into
-`build/rootfs/usr/bin/ranlib`: task **C9d** in [../TODO.md](../TODO.md), with [`../ar`](../ar).
+`build/rootfs/usr/bin/ranlib`: task **C9d** in [../README.md](../README.md), with [`../ar`](../ar).
 [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build machinery, and there is **no second
 copy of any source**.
 
@@ -77,7 +77,7 @@ read like a size knob that did something.
 
 ### Descriptors and streams
 
-[../TODO.md](../TODO.md) expected the stdio-buffer arithmetic that dominated [`../ld`](../ld),
+[../README.md](../README.md) expected the stdio-buffer arithmetic that dominated [`../ld`](../ld),
 where twelve open streams cost 6,144 words of heap at the default `BUFSIZ`. It does not arise.
 `ranlib` holds **one** `FILE *` at a time — `fi` is closed before `fo` is opened — so with
 stdout and stderr that is three buffers, about 1,536 words, and no `setvbuf()` is called for.

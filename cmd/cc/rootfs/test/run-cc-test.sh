@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two ccs built from one source must drive the chain the same way, byte for byte.
-# Task C9e, ../../TODO.md.  Invoked by ctest as:
+# Task C9e, ../../README.md.  Invoked by ctest as:
 #
 #	run-cc-test.sh HOSTCC SIM PROG HOSTCPP HOSTAS HOSTLD ROOTFS LIBCDIR RTDIR SRCDIR NAME KIND
 #

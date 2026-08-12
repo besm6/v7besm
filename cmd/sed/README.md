@@ -14,7 +14,7 @@ Half the ceiling, and the largest of the seventeen filters — 5,696 words of bs
 `tlno` (256), which is most of the program before a line of code.
 
 **Read [../grep/README.md](../grep/README.md) and [../ed/README.md](../ed/README.md)
-first.** [../TODO.md](../TODO.md) said so and it was right: two of the five things below
+first.** [../README.md](../README.md) said so and it was right: two of the five things below
 are those two tasks' recipes applied, and the value of this file is the three that were in
 neither.
 
@@ -54,7 +54,7 @@ The `CCL` bitmap is 256 bits here as `grep`'s became in task C5c, and every word
 task's account applies: the **compile** side masked nothing, `char` is unsigned, so a
 pattern byte of `0300` stored eight bytes past its own sixteen-byte class and on top of
 bytecode `compile()` had already written. The five widths and two masks are tabulated in
-[../TODO.md](../TODO.md)'s brief and were all where it said.
+[../README.md](../README.md)'s brief and were all where it said.
 
 **And one thing this port expected from `grep` and did not get.** `grep`'s proving assertion is
 a *false positive*: `& 0177` folds `0320` onto `P`, so v7's `grep` finds `[п]` inside `ALPHA`.
@@ -253,7 +253,7 @@ the host's `sed`** as an independent second opinion, and it disagrees about exac
 two v7-only flags (`-g`, `s///P`) and the four `l` cases, which are the divergence. The
 other seventy-odd agree byte for byte with an implementation sharing no line with this one.
 That is [../grep/README.md](../grep/README.md)'s closing finding pointed at `sed` as
-[../TODO.md](../TODO.md) asked, and it cost about a minute.
+[../README.md](../README.md) asked, and it cost about a minute.
 
 **The file oracle** ([test/run-sed-test.sh](test/run-sed-test.sh)) says four things no
 stdout diff can, and the first is the one a careless test misses: **a `w` file is created

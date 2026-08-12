@@ -1,6 +1,6 @@
 # tar, and the struct layout this tree had wrong
 
-`/bin/tar` is task C7 ([../TODO.md](../TODO.md)) and the whole of it: one 935-line v7 source,
+`/bin/tar` is task C7 ([../README.md](../README.md)) and the whole of it: one 935-line v7 source,
 and the first program on this image that can move a **tree**. Everything before it — `dd`,
 `mkfs`, `fsck`, `mount` — moves blocks.
 
@@ -100,7 +100,7 @@ flat `char` array indexed by hand. `run-tar-test.sh` section 2 is the assertion,
 **sharp**: putting the defect back (addressing `tbuf` at `sizeof(union hblock)`) makes the
 first `cmp` of section 1 fail.
 
-## Three things a raw device wanted, and `../TODO.md` said none of them were needed
+## Three things a raw device wanted, and `../README.md` said none of them were needed
 
 C7's brief said of `tar cf /tmp/x` and `tar cf /dev/rmd0`: *"Both work today; nothing in the
 program needs a device this kernel has not got."* The second breaks three of `physio()`'s four

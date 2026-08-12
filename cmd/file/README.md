@@ -1,6 +1,6 @@
 # `file`, and what a program that classifies bytes has to be told about UTF-8
 
-Task C5f, and the one program of the seven that [../TODO.md](../TODO.md) says gets a
+Task C5f, and the one program of the seven that [../README.md](../README.md) says gets a
 **deliberate change rather than a faithful port**. §1's C11 pass is mechanical and is not
 repeated here.
 
@@ -120,7 +120,7 @@ char *as[]  = { "globl", "byte", "even", "text", "data", "bss", "comm", 0 };
 PDP-11 mnemonics and PDP-11 `as` pseudo-ops, used to recognize assembler source. They are
 `b6as`'s now — `cmd/as/symtab.c`'s directives and `cmd/as/tables.c`'s Madlen mnemonics — and
 `.even` is gone with them, a word machine having nothing to align to. `troff output`
-(`buf[0] == '\100' && buf[1] == '\357'`) went too: [../TODO.md](../TODO.md)'s exclusion table
+(`buf[0] == '\100' && buf[1] == '\357'`) went too: [../README.md](../README.md)'s exclusion table
 drops the whole typesetting suite, so nothing here produces it.
 
 **The general question is the one this file asks twice: what still feeds the mechanism?** For

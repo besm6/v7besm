@@ -162,7 +162,7 @@ default handling of the implementation-defined extended identifier set (§6.4.2)
 
 These same eight sources are built a **second** time, by the `b6*` cross toolchain, into
 `build/rootfs/usr/bin/cpp` — the preprocessor that runs on the machine, and the first step of
-self-hosting (task **C9a** in [../TODO.md](../TODO.md); the plan is [TODO.md](TODO.md)).
+self-hosting (task **C9a**, [../README.md](../README.md)).
 [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build machinery, and there is **no second
 copy of any source**: the only thing that differs is a size profile in [`defs.h`](defs.h) keyed
 on the `besm6` predefine above.

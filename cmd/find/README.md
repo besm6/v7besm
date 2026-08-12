@@ -151,7 +151,7 @@ The conversion cost **234 words**, 6,697 to 6,931.
 It wrote a PDP-11 `cpio` archive out of 16-bit `short`s — through a **run-time byte-order
 probe**, `union { long l; short s[2]; char c[4]; }` with `if (U.c[0] /* VAX */)` — and
 `chgreel()` prompted on `/dev/tty` for the next **magnetic tape reel**.
-[../TODO.md](../TODO.md)'s exclusion table drops all of v7's tape software, this kernel has no
+[../README.md](../README.md)'s exclusion table drops all of v7's tape software, this kernel has no
 tape driver and no `bdevsw` row for one, and an archive nothing on the machine can read is not
 a service. `getty`'s speed table and `col`'s half-shift are the precedent, and the question
 they all answer is the same one: *what still feeds this mechanism?*

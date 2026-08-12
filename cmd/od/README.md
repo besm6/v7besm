@@ -1,6 +1,6 @@
 # `od`'s flags did not change meaning. The machine word did.
 
-`od` is one of task C5b's seven ([../TODO.md](../TODO.md)) and the one that had to be
+`od` is one of task C5b's seven ([../README.md](../README.md)) and the one that had to be
 *designed* rather than ported. Its whole subject is the machine word, and a machine word here
 is 48 bits where v7's was 16.
 
@@ -18,7 +18,7 @@ column, because the thing they print got three times bigger:
 | `-b` | 3 octal per byte | unchanged |
 | `-c` | character | unchanged |
 
-**`-w` is a second spelling of `-o`, not a format of its own.** [../TODO.md](../TODO.md)
+**`-w` is a second spelling of `-o`, not a format of its own.** [../README.md](../README.md)
 asked for "a `-w` word dump in 16 octal digits, beside the byte formats", and a synonym is
 what delivers that without the one change that really *would* have redefined a v7 flag —
 making `-o` byte-sized so that `-w` could be the word. `cmd_od_word` is a diff of two
@@ -51,7 +51,7 @@ the top eight bits of the word. A short group at the end is padded with zero byt
 
 ## What the PDP-11 word was baked into, and it was more than the ten `long`s
 
-[../TODO.md](../TODO.md) flagged `od` for its ten `long`s. They were the least of it — every
+[../README.md](../README.md) flagged `od` for its ten `long`s. They were the least of it — every
 one is a single word here and every cast vanishes. Five other things carried the 16-bit
 assumption, and the fourth is the one that mattered.
 

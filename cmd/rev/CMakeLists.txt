@@ -1,6 +1,6 @@
 # /bin/rev -- Unix v7 rev(1), built natively for the BESM-6.
 #
-# One of task C5a's six (../TODO.md), and the only one of them that is not a faithful port:
+# One of task C5a's six (../README.md), and the only one of them that is not a faithful port:
 # it reverses UTF-8 sequences where v7 reversed bytes.  README.md beside it is the account,
 # rev.c's header the short form, and rev.1.umm was rewritten rather than corrected.
 #

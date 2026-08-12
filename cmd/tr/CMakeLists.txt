@@ -1,6 +1,6 @@
 # /bin/tr -- Unix v7 tr(1), built natively for the BESM-6.
 #
-# One of task C5b's seven (../TODO.md), and the cheapest: v7's tr is eight-bit clean already,
+# One of task C5b's seven (../README.md), and the cheapest: v7's tr is eight-bit clean already,
 # its three tables being [256] as v7 wrote them.  tr.c's header is the account, including the
 # one `&0377' of the eight that is load-bearing and the one write into a string literal that
 # is not.

@@ -7,7 +7,7 @@
 # environment overrides (B6CPP, B6PARSE, ...) or under ~/.local/bin | /usr/local/bin.
 #
 # The same source is built a SECOND time, for the machine itself, into
-# build/rootfs/usr/bin/cc -- see rootfs/, and task C9e in ../TODO.md.  There the
+# build/rootfs/usr/bin/cc -- see rootfs/, and task C9e in ../README.md.  There the
 # search is /usr/bin, /usr/include and /lib, and the sub-tools carry no `b6'
 # prefix; the profile at the head of cc.c is the whole of the difference.
 #

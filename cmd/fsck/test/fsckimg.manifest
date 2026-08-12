@@ -1,6 +1,6 @@
 # The fixture filesystem fsck's b6sim cases repair -- task C4d.
 #
-# WHY THIS IS NOT ../../df/test/fsimg.img.  ../../TODO.md says C4d should copy df's fixture
+# WHY THIS IS NOT ../../df/test/fsimg.img.  ../../README.md says C4d should copy df's fixture
 # rather than build a second, and for `dd' (C4b) that was right: dd does not care what is
 # in the blocks it moves.  fsck does.  df's fixture has no lost+found, no hard link, no
 # device node, no indirect block and nothing nested below depth 1, so the reconnect path,

@@ -13,7 +13,7 @@ Part of the ordinary top-level build; there is nothing to invoke separately.
 
 ```sh
 make            # builds build/rootfs/bin/sh among everything else
-make run        # runs its size check and its seven b6sim tests, with the rest
+make run        # runs its size check and its ten b6sim tests, with the rest
 ```
 
 Two conditions gate it, both shared with `kernel/` and `lib/`: the external
@@ -22,9 +22,11 @@ the link is `crt0.o *.o -lc -lruntime` in that order. [`CMakeLists.txt`](CMakeLi
 `b6_prog()` call plus `-I.`, which matters: `defs.h` includes `"ctype.h"`, and that must resolve
 to the shell's own character tables rather than the C11 `<ctype.h>` in the system tree.
 
-It uses **8,999 words of the 28,672** available, with the highest relocatable symbol well inside
-the 32,767 a 15-bit pointer reaches. It was 7,971 until task C24; the extra 1,028 are the
-subject of the next section but one.
+It uses **9,008 words of the 28,672** available, with the highest relocatable symbol well inside
+the 32,767 a 15-bit pointer reaches. It was 7,971 until task C24; 1,028 of the difference are the
+subject of "Globbing" below and the last nine are task C29's, in the section after it. **The
+number that decides what this program can do is not that one** — it is the frame of `execute()`,
+and it has a section of its own.
 
 ## What the port changed
 
@@ -283,7 +285,7 @@ would have rejected fd 0 — became a NULL check. And the `d_ino == 0` test is t
 while ((dp = readdir(dirp)) != NULL && (trapnote & SIGSET) == 0)
 ```
 
-so a globbing shell is still interruptible between entries, which is the reason `cmd/TODO.md`
+so a globbing shell is still interruptible between entries, which is the reason `cmd/README.md`
 gave for possibly leaving this file alone. What changed is only that `readdir()` may block in
 one buffer-sized `read(2)` where the old loop blocked in a 24-byte one — latency, not
 correctness.
@@ -297,9 +299,87 @@ tree of §6's rule that what a program *links* is decided by its smallest call, 
 `ttyname(3)` deliberately does not use this library either: `/bin/login` and `/etc/getty` should
 not carry an allocator to scan `/dev`.
 
+## The stack, and what a nested script costs
+
+Task **C29**. Not the expression stack of the section above — the **machine** stack, the one the
+C calls run on, four pages at `070000` and 4,096 words in all. It is the scarcest thing this
+program has, and until C29 nothing in the tree said so.
+
+**`execute()` recurses once per node of the parse tree**, so its frame is resident once per level
+of nesting. v7 wrote it as one 404-line function, and this machine gives a frame **one slot per
+compiler temporary and never reuses one**, so the 200-line built-in switch was reserved on every
+recursion whether or not `case TCOM` was the arm being taken. Measured in the `.dis` the build
+writes:
+
+| | `execute` frame | words per level of nesting | levels that fit |
+|---|---|---|---|
+| v7's shape | 402 | 410 | **8** |
+| split | 99 | 107 | **16** |
+
+Sixteen and not thirty-eight, because **once `execute()` is down to 107 the PARSER is the deeper
+of the two walks**: `cmd → list → term → item → cmd` is about 150 words a level, and past four
+levels of nesting it is what the budget is being spent on. That is why `deepchk()` is called from
+`cmd()` as well, and it is where the next few levels are if anybody ever needs them.
+
+The split is four `static` functions in [`xec.c`](xec.c) — `docom()`, `dofork()`, `dofor()` and
+`doswitch()`, one per big arm — and nothing else: the code inside them is v7's, moved. Only one
+arm is live at a time, so a function each costs one frame instead of all of them at once. The
+whole change is +9 words of image. The one delicate part is v7's fall-through from `TCOM` into
+`TFORK`, which is how every external command is run: `docom()` returns whether the command was a
+built-in and hands the argument vector back for the child to exec.
+
+**The ninth level did not fault; it rewrote the program.** A user address is 15 bits and the
+process owns all 32 pages, so a store past `077777` wraps mod 2^15 onto word 0 — which is the
+shell's own const image. Hence the way it was reported: `** SIGNAL 8 **`, the message tables
+printed to the console as text, and `cannot shift` from a builtin the script never called. That
+is `syslook()` reading a table that has been overwritten.
+
+**Two known limits were this, and both are closed.** v7's `calendar(1)` — a `case` arm holding a
+`while` whose body holds an `if` and a pipeline — did not run on this machine at all (task C23,
+[`../calendar/README.md`](../calendar/README.md)); and a pipeline of four or more stages *inside
+a command substitution* killed the shell with `SIGNAL 4` (task C8, undiagnosed and written down
+here as its own corner). They are one bug: four levels of nesting plus the frames a substitution
+adds, against a budget of eight.
+
+**Why no test had ever seen it, and how to measure it.** The b6sim harness runs `env -i`, and the
+argv/envp block sits at the **base of that same stack** (`argc` is at absolute `070000`,
+[`kernel/sys1.c`](../../kernel/sys1.c)) — so a login shell on the booted machine had several
+hundred words fewer to spend than the test rig did. The calendar script measures 3,737 words of
+4,096 with an empty environment: it *passed* here and died there. **Padding the environment is
+what brings it back onto the host**, and that is the technique worth keeping for the next one of
+these — `b6sim` passes a whitelist of the host's variables through, so any two of them will do:
+
+```sh
+P=$(python3 -c "print('x'*1200)")
+env -i EDITOR="$P" PAGER="$P" b6sim ./sh ./repro.sh
+```
+
+The shell before the split answered that with `Division by zero` at 1,200 bytes of padding — the
+machine's `** SIGNAL 8 **` — with a hang at 1,500, and at 2,500 with
+`Illegal instruction 002 reg/mod @00616`, which is the program executing its own const segment.
+
+The measurement itself is `b6sim -d`: the trace prints every write to `M17`, and the largest of
+them less `070000` is the peak.
+
+```sh
+b6sim -d --trace=t.txt ./sh ./script.sh
+grep -o 'M17 = [0-7]*' t.txt | sort -u | tail -1
+```
+
+**And the shell now checks the ceiling itself**, because nothing else on this system can:
+`deepchk()` ([`error.c`](error.c)) at the top of `execute()` and of `cmd()` — the parser fails the
+same silent way, and past four levels it is the one doing the spending —
+compares the address of a local against the floor `main()` recorded and says `too deep` rather
+than wrapping. The bound (`STAKROOM`, [`brkincr.h`](brkincr.h)) is **worst case rather than
+exact**, and cannot be otherwise: the shell would have to name the address `070000` to know how
+much of the stack the argument block below it took, and fabricating a pointer out of an integer
+is the thing this port does not do. So it is 4,096 words less the 854 (`NCARGS`) that block can
+be at its largest, less room for `error()` to report it — 2,800 words, which is sixteen levels of
+nesting where a script that means anything uses four.
+
 ## Tests
 
-Seven, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
+Ten, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 
 | test | what it covers |
 |---|---|
@@ -310,6 +390,9 @@ Seven, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 | `sh_comment` | the `#` comment character: where it does *not* start one (inside a word, inside either quote, after a backslash, in `$#`, in a here-document body), the `\`-newline that must not continue it, and the unterminated last line that must not spin |
 | `sh_utf8` | task C11: the four ways of quoting a Cyrillic word, substitution, splitting, `case` with `*`/`?`/`[...]` and a quoted wildcard, both kinds of here-document, command substitution, the empty quoted word, and the byte `0377` -- the one value the stored form has to write twice |
 | `sh_nospace` | the arena and the break, to exhaustion |
+| `sh_nest` | task C29: twelve levels of `case`/`if`/`for`, where the shell before the split of `execute()` died at nine — and died by rewriting its own const image, not by saying anything |
+| `sh_toodeep` | the far end of the same budget: an `eval` that evals itself for ever must produce `too deep` and status 1 |
+| `sh_subpipe` | a pipeline of four and of five stages inside a command substitution — task C8's `SIGNAL 4`, which was the same stack |
 
 `b6sim` runs one BESM-6 `a.out` and services its syscalls on the host, which is enough for the
 lexer, the parser, macro expansion, the name tree and — underneath all of them — the arena and
@@ -341,8 +424,10 @@ which gets it right, would have run it. `Machine::ExecError` now carries the err
 
 **What is still out of reach**, and why:
 
-* **Executing a compiled program.** There is no external BESM-6 binary on the image yet, so a
-  command name that is not a script only ever reaches "not found".
+* **Executing a compiled program other than the one the runner brings.** `b6sim` resolves `PATH`
+  against the HOST filesystem, where every binary is an ELF file it cannot load, so only a BESM-6
+  `a.out` copied in beside the fixture can be run. `run-sh-test.sh` copies `./echo`, and
+  `sh_utf8` and `sh_subpipe` are what use it.
 * **Globbing.** [`expand.c`](expand.c) reads directories, and `b6sim` maps that onto the host,
   where a directory descriptor refuses to be read. Since task C24 it goes through `opendir(3)`,
   which makes the failure **worse**: `open(2)` and `fstat(2)` on a host directory both succeed
@@ -353,10 +438,11 @@ which gets it right, would have run it. `Machine::ExecError` now carries the err
 * **Traps and interrupts.** `b6sim`'s `signal()` implements only `SIG_DFL` and `SIG_IGN`.
 
 All three need the real kernel, which this shell runs on. `kernel/test/console` and
-`kernel/test/session`, which typed at it and had it write files, are both deleted; `kernel/test/multi`
-is what boots to a shell today, and it neither globs, sends a signal nor grows the stack into a
-fault. So all three — and the memory-fault path above — are still undriven, and those are the
-stages to add.
+`kernel/test/session`, which typed at it and had it write files, are both deleted;
+`kernel/test/multi` is what boots to a shell today. Since task C29 it types a `case` round a
+`while` round an `if` round a pipeline at root's prompt — the one thing that has to be asserted
+where a real environment sits under the stack — but it still neither globs, sends a signal nor
+grows the arena into a fault, and those are the stages to add.
 
 Two notes on the fixtures. They are commented with `#`, which they were not until this shell had
 one — the `:` lines they used to carry are what the comment character replaced, and converting
@@ -364,11 +450,11 @@ them back was the first check that it works. And the runner clears the environme
 because `b6sim` hands the guest a whitelist of the host's variables, the shell reads all of them
 into its name tree at startup, and `set` prints the tree.
 
-A third: **there is no `echo` here.** No external program can be exec'd under `b6sim`, so a
-fixture that wants to report something leaves it in a variable and ends with `set`. `comment.sh`
-is written that way, and the one thing it cannot show is a command substitution's *value* —
-`` `umask` `` prints where it stands rather than being captured, which is `b6sim`'s pipe and not
-the shell.
+A third: **`echo` is the only program a fixture may name**, and it has to be spelled `./echo` —
+a bare `echo` finds the host's. So a fixture that wants to report something usually leaves it in
+a variable and ends with `set` instead. `comment.sh` is written that way, and the one thing it
+cannot show is a command substitution's *value* — `` `umask` `` prints where it stands rather
+than being captured, which is `b6sim`'s pipe and not the shell.
 
 ## Known limits
 
@@ -385,39 +471,12 @@ the shell.
   Leaving them as they were is not available: a half-encoded name tree makes the value push in
   `macro.c` wrong whichever way it is written — encode unconditionally and these two values are
   encoded twice, pass them through and a `0377` arriving from the environment is read as a mark.
-* **A pipeline of four or more stages *inside command substitution* kills the shell**, and the
-  repro is three lines. Found by task C8 while writing `kernel/test/inspect`; **not diagnosed,
-  and not this shell's only unexplained corner** — it is written down here so the next person
-  starts from a minimal case rather than from a test that stopped.
-
-  ```sh
-  a=`echo x | cat | cat`              # fine
-  b=`echo x | cat | cat | cat`        # SIGNAL 4 -- the script dies here
-  echo x | cat | cat | cat | cat      # fine: four stages, no backquotes
-  ```
-
-  So it is **not** the pipeline depth on its own and **not** command substitution on its own —
-  it is the two together, at three stages inside the substitution and above. The signal is 4,
-  SIGILL, which on this machine means the trap handler saw an illegal instruction; a shell that
-  had merely run out of a table would say so. Suspect the interaction between `service.c`'s
-  fork-per-stage and the `stak.c` region the substitution's output is being read into, which is
-  the one thing that differs between the two forms. Until it is understood, a script that needs
-  four stages puts the first three in a pipeline of their own and reads the file back:
-  `kernel/test/inspect.sh` is the worked example and says so where it does it.
-* **A `case` arm holding a `while` whose body holds a pipeline kills the shell too**, and it is
-  task **C29** in [`../TODO.md`](../TODO.md), which carries the repro. Found by task C23: v7's
-  `calendar(1)` is written that way and does not run here at all
-  ([`../calendar/README.md`](../calendar/README.md) has the bisection). **It is very probably the
-  bullet above in another suit** — the same `SIGNAL 4`, the same absence of any diagnostic, the
-  same rule that every ingredient works alone and one more level of nesting does not — and
-  whoever takes C29 should read the two together rather than treat them as separate corners. The
-  difference worth having is that this one leaves evidence: the shell's message tables and
-  variable list print to the console as text, and then a `cannot shift` arrives from a builtin
-  the script never calls, which is a corrupted data segment saying so out loud.
-
-  Neither repro can be a case in [`test/`](test/): that suite runs under `b6sim`, where no
-  external program can be `exec`'d, so **not one case in it contains a pipeline**. The syntax is
-  covered; what the syntax *runs* is not, and both of these live in the gap.
+* **A script may nest sixteen levels deep**, and the seventeenth is refused with `too deep`
+  rather than run. That is the ceiling `deepchk()` enforces and the section above is the account
+  of it; v7 had no limit and no way to survive passing one. Two entries that used to stand here
+  — a pipeline of four stages inside a command substitution dying with `SIGNAL 4` (task C8), and
+  a `case` arm holding a `while` holding a pipeline eating the shell (task C29) — were both this
+  one thing, and both now have fixtures in [`test/`](test/) rather than paragraphs here.
 * **`?` and `[...]` match one BYTE, not one character**, so `приве?` does not match `привет`.
   See the C11 section above; `test/utf8.sh` asserts it.
 * **`wait()`'s status comes back in r12, a 15-bit index register**, so an exit code of 128 or more
@@ -439,4 +498,4 @@ the shell.
 `sh.1.umm` is the v7 manual page, corrected in place on the [`lib/libc/man/`](../../lib/libc/man/)
 precedent: one addition, a `Comments.` paragraph marked `Note:` as the deviation from v7 that it
 is. It goes on the image as `/usr/man/man1/sh.1`, where manview(1)
-([`../TODO.md`](../TODO.md) C25a) formats it — and it is legible as it stands either way.
+([`../README.md`](../README.md) C25a) formats it — and it is legible as it stands either way.

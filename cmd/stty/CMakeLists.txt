@@ -1,6 +1,6 @@
 # /bin/stty -- Unix v7 stty(1), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md), and the one program in it whose port IS a cut: v7's two tables
+# Task C6 (../README.md), and the one program in it whose port IS a cut: v7's two tables
 # describe a dial-up terminal, and most of what they name is inert on a Consul-254.  Eleven
 # groups of entries came out, measured against kernel/dev/tty.c rather than assumed --
 # stty.c's header is the list and README.md is the account.  ../getty is the precedent: the

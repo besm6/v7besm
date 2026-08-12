@@ -1,6 +1,6 @@
 # /bin/ed -- Unix v7 ed(1), built natively for the BESM-6.
 #
-# Task C3 (../TODO.md), and the pivot of the whole userland plan: this is the first program
+# Task C3 (../README.md), and the pivot of the whole userland plan: this is the first program
 # on the image that can AUTHOR text.  Everything staged here before it was written on the
 # build host.  b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over ed.c,
 # links it `crt0.o ed.o -lc -lruntime' against the libc built in ../../lib, and stages the

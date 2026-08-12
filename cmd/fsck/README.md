@@ -16,7 +16,7 @@ cannot arise here.
 
 ## 1. The best oracle in the tree, and the four times it disagreed
 
-`cmd/TODO.md` picked this task out for a reason: `cmd/fsutil/check.cpp` already implemented
+`cmd/README.md` picked this task out for a reason: `cmd/fsutil/check.cpp` already implemented
 the same checks on the host, in C++, sharing not one line with the guest. So a damaged
 filesystem can be handed to both, and **every case they disagree on is a bug in one of
 them**. That is the whole design of [test/](test/): `b6fsutil -D` breaks an image, `fsck -y`
@@ -225,7 +225,7 @@ rather than leaving the next person to find it.
 
 `const 125, text 6323, data 587, bss 3807` — **10,842 words** of the 28,672, plus about
 1,300 of heap for a full drive. It is the largest program on the image, ahead of `quot`'s
-9,912, and it is not close to the ceiling: `cmd/TODO.md` held the option of splitting it as
+9,912, and it is not close to the ceiling: `cmd/README.md` held the option of splitting it as
 v7 split `icheck`/`dcheck` in reserve, and that is not needed. Of the `bss`, 2,560 words are
 the four aligned block buffers and about 1,030 are stdio's.
 

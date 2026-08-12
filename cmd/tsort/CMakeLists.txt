@@ -1,6 +1,6 @@
 # /bin/tsort -- Unix v7 tsort(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md).  tsort.c's header is the account: index() colliding with libc's
+# Task C5f (../README.md).  tsort.c's header is the account: index() colliding with libc's
 # index(3) in the shape §1 calls most dangerous, since b6ld pulls an archive member only for
 # a symbol still undefined; error() called with one argument from two places on the cyclic
 # path, which is the case this program exists to diagnose; and `%s' with no field width into

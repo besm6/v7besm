@@ -10,7 +10,7 @@
 //
 //      man [ - ] [ -a ] [ -w ] [ -M path ] [ section ] title ...
 //
-// Task C25b (../TODO.md).  The source is RetroBSD's src/cmd/man/man.c, which is 4.3BSD's;
+// Task C25b (../README.md).  The source is RetroBSD's src/cmd/man/man.c, which is 4.3BSD's;
 // v7 HAD a man, but it was a shell script around nroff and there is no nroff here.
 //
 // THIS PROGRAM DOES NOT FORMAT: it finds a page and runs one formatter over it.  FORMATTER

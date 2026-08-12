@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two assemblers built from one source must produce the same object, byte for byte.
-# Task C9b, ../../TODO.md.  Invoked by ctest as:
+# Task C9b, ../../README.md.  Invoked by ctest as:
 #
 #	run-as-test.sh HOSTAS SIM PROG SRCDIR NAME [args...]
 #

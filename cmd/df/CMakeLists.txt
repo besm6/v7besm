@@ -1,6 +1,6 @@
 # /bin/df -- df(1M), built natively for the BESM-6: v7's program with 4.4BSD's report.
 #
-# The first of task C4a's three (../TODO.md): a cmd/ subdirectory that is NOT a host tool.
+# The first of task C4a's three (../README.md): a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over df.c, links it
 # `crt0.o df.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/bin/df.  Added from inside the top-level libruntime guard, after lib/, and

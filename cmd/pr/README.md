@@ -6,7 +6,7 @@ and is not repeated here; what follows is what the port *taught*.
 
 The brief predicted two things about this program and got one and a half of them right. §2's
 table said "two, both `>= &buffer[BUFS]`"; the count is **three** and the missed one is the
-`<`. And [../TODO.md](../TODO.md) said `pr` is the one program left with `od`'s property —
+`<`. And [../README.md](../README.md) said `pr` is the one program left with `od`'s property —
 output no reviewer can check by eye — which is true, but not for `od`'s reason.
 
 ## The three §2 relationals, and why they were rewritten anyway

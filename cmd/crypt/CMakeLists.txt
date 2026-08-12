@@ -1,4 +1,4 @@
-# /bin/crypt -- Unix v7 crypt(1), the one-rotor machine.  Task C19 (../TODO.md).
+# /bin/crypt -- Unix v7 crypt(1), the one-rotor machine.  Task C19 (../README.md).
 # ./README.md is the account.
 #
 # rotor.c IS SHARED WITH ../ed, which links it for -x: ../df and ../umount share

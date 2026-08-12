@@ -1,6 +1,6 @@
 # /bin/file -- Unix v7 file(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md), and the one program of the seven that ../TODO.md says gets a
+# Task C5f (../README.md), and the one program of the seven that ../README.md says gets a
 # DELIBERATE change rather than a faithful port.  ./README.md is the account and file.c's
 # header the summary: this machine's magic numbers instead of the PDP-11's, RELFLG telling a
 # linked executable from a relocatable object, b6as's directives and Madlen mnemonics in

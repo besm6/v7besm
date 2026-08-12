@@ -1,6 +1,6 @@
 # `cmd/yacc` — the parser generator
 
-Tasks **C10a** and **C10c** ([`../TODO.md`](../TODO.md)): the host tool `b6yacc`, the parser
+Tasks **C10a** and **C10c** ([`../README.md`](../README.md)): the host tool `b6yacc`, the parser
 skeleton it copies, and the `b6_yacc()` CMake helper — then the same sources built a second time
 as the machine's own `/usr/bin/yacc`. C10b builds `b6lex` on top of the first.
 

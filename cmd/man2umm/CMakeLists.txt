@@ -9,7 +9,7 @@
 # same reason this is -- they run on the build machine and nowhere else.)
 #
 # IT IS NOT A RUN-ONCE TOOL.  The 200 pages this tree carried were the first job,
-# not the only one: every v7 program still to be ported (../TODO.md C10-C24, and the
+# not the only one: every v7 program still to be ported (../README.md C10-C24, and the
 # unported pages already sitting in ../awk/, ../make/ and the rest) arrives with a
 # roff page that has to become a .md.  ./README.md is the standing procedure and
 # ../../scripts/mancheck.py is its verification step.

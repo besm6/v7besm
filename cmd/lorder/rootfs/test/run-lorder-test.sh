@@ -1,6 +1,6 @@
 #!/bin/sh
 # The staged /usr/bin/lorder must print what the host b6lorder prints, run BY THE BESM-6
-# SHELL over the BESM-6 nm, sed, sort, join and basename.  Task C9c, ../../TODO.md.
+# SHELL over the BESM-6 nm, sed, sort, join and basename.  Task C9c, ../../README.md.
 # Invoked by ctest as:
 #
 #	run-lorder-test.sh HOSTLORDER HOSTNM SIM SH ROOTFS AS SRCDIR NAME FIXTURE

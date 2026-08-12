@@ -4,7 +4,7 @@
 # argument, and no BESM-6 a.out exists at any path on the build machine, so nothing it could
 # be asked to run would load.  And it reports through times(2), which b6sim answers out of the
 # HOST's ::times() in the host's own clock units -- not this machine's 250 Hz, and not the
-# same twice.  ../TODO.md said as much before the port started: "all five except time test
+# same twice.  ../README.md said as much before the port started: "all five except time test
 # cleanly under b6sim".
 #
 # What is left is the one path that returns before any of that: with no command to run, v7's

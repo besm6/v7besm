@@ -5,7 +5,7 @@
 //
 //      uniq [ -udc [ +n ] [ -n ] ] [ input [ output ] ]
 //
-// One of task C5b's seven (../TODO.md).  No §2 in it, no `long', no `%D'; what it has is one
+// One of task C5b's seven (../README.md).  No §2 in it, no `long', no `%D'; what it has is one
 // unbounded write, one ctype call that indexes off the end of a table, and one v7 property
 // that is not a bug and is worth naming before somebody "fixes" it.
 //

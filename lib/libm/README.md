@@ -306,4 +306,4 @@ that `cabs` is gone, and that `floor.3m.umm` now owns seven C11 routines v7 had 
 
 Nothing installs them — no `CMakeLists.txt` in this tree has a man rule yet — but they are staged
 onto the image by the top-level `B6_STAGE_MAN` glob, where manview(1)
-([`../../cmd/TODO.md`](../../cmd/TODO.md) C25a) formats them.
+([`../../cmd/README.md`](../../cmd/README.md) C25a) formats them.

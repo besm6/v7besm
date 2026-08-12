@@ -1,6 +1,6 @@
 # `grep`, and the sixteen bytes that were never wide enough
 
-Task C5c: `grep` and `fgrep`, the fourteenth and fifteenth of [../TODO.md](../TODO.md)'s text
+Task C5c: `grep` and `fgrep`, the fourteenth and fifteenth of [../README.md](../README.md)'s text
 filters, and the two that carry the **`CCL` bitmap** the plan has been pointing at since task
 C3. [../README.md](../README.md) §1's C11 pass over both files is in their own headers and is
 not repeated here — what the port *taught* is below.
@@ -12,7 +12,7 @@ called done, by measuring instead of reading.
 
 ## The bitmap was not only narrow. It was also a wild store.
 
-[../README.md](../README.md) §11 and [../TODO.md](../TODO.md) both described the hazard the same
+[../README.md](../README.md) §11 and [../README.md](../README.md) both described the hazard the same
 way: `grep` packs a character class into 128 bits, sixteen bytes addressed `bittab[c & 07]` at
 `c >> 3`, and it has to become 256 bits so that a class can hold a byte above `0177`. That is
 true, and it is the *match* side:

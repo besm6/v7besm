@@ -8,7 +8,7 @@
 //      read_umm(write_umm(read_man(x))) == read_man(x)
 //
 // is what says the format the converter writes is a format something else can read
-// back.  A renderer (cmd/TODO.md task C25) links this file and adds a back end.
+// back.  A renderer (cmd/README.md task C25) links this file and adds a back end.
 //
 // It parses the dialect and only the dialect.  It is not a Markdown implementation:
 // there is no link syntax, no HTML, no setext heading, no thematic break, and an

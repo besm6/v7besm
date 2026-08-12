@@ -19,7 +19,7 @@
 #   2. what fsck said, against a checked-in transcript.
 #   3. `b6fsutil -c' must SUCCEED afterwards.  The guest repaired it; the host, whose
 #      checker is a separate implementation, cannot fault the result.  That is what
-#      ../../TODO.md's "require both to report the same thing" comes to.
+#      ../../README.md's "require both to report the same thing" comes to.
 #   4. fsck run a second time must find nothing and modify nothing -- a repair that is not
 #      idempotent is a repair that did not finish.
 #   5. and it must exit 0 doing it.
@@ -60,7 +60,7 @@ if [ -s "$srcdir/$case.damage" ]; then
 
     # The damage.  One spec per line, comments and blank lines skipped, so a .damage file
     # can say why.  b6fsutil -D resolves the field names itself -- no test script here
-    # computes a block or a word offset, which is ../../TODO.md's rule for on-disk
+    # computes a block or a word offset, which is ../../README.md's rule for on-disk
     # constants and the reason the verb is symbolic.
     specs=$(grep -v '^[ 	]*#' "$srcdir/$case.damage" | grep -v '^[ 	]*$')
     for spec in $specs; do

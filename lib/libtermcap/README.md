@@ -174,7 +174,7 @@ what 4.2BSD did as well as what happens now:
 A `BESM-6 NOTES` section carries `MAXHOP` and the unconditional `%` forms, and `FILES` names
 `share/besm6/lib` rather than `/usr/lib`. Nothing installs it — no `CMakeLists.txt` in this tree
 has a man rule yet — but it is staged onto the image by the top-level `B6_STAGE_MAN` glob, where
-manview(1) ([`../../cmd/TODO.md`](../../cmd/TODO.md) C25a) formats it.
+manview(1) ([`../../cmd/README.md`](../../cmd/README.md) C25a) formats it.
 
 ## Testing
 

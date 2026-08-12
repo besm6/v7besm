@@ -3,7 +3,7 @@
 # /etc AND NOT /bin, as iostat and quot beside it: section 1M, and v7 put the binary there.
 # So the two hard-coded `ls /bin' expectations do not have to grow for it.
 #
-# NOT ROOT-ONLY, which is a correction to what ../TODO.md says: every table this program
+# NOT ROOT-ONLY, which is a correction to what ../README.md says: every table this program
 # prints comes through kctl(2), and kctl(2) is unprivileged.  Only -u opens a device --
 # /dev/kmem or /dev/mem, both 0640 and root's -- so seven of the eight modes work for
 # anybody and that one does not.  pstat.c's header is the account.

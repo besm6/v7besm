@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two strips built from one source must leave the same object behind, byte for byte.
-# Task C9c, ../../TODO.md.  Invoked by ctest as:
+# Task C9c, ../../README.md.  Invoked by ctest as:
 #
 #	run-strip-test.sh HOSTSTRIP SIM PROG AS NM SRCDIR NAME FIXTURE [args...]
 #

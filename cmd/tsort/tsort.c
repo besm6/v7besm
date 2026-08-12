@@ -8,7 +8,7 @@
 // Input is a sequence of pairs of blank-free strings.  A pair of different items is a
 // directed edge in the graph; a pair of identical items merely says the node is present.
 // Output is an ordering of the items consistent with the graph.  One of task C5f's seven
-// (../TODO.md).
+// (../README.md).
 //
 // No §2 -- not a pointer relational in the file -- no `long', no `%D', no table indexed by a
 // character, and nothing that assumes sixteen bits.  Three things had to change.

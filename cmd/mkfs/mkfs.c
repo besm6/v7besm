@@ -111,7 +111,7 @@
 #include <time.h>
 #include <unistd.h>
 
-// What this file assumes of the layout, asserted rather than re-derived (../TODO.md,
+// What this file assumes of the layout, asserted rather than re-derived (../README.md,
 // task C4).  The headers carry the rest: sys/filsys.h asserts the superblock is exactly
 // one block, sys/ino.h that INOPB dinodes tile one, sys/dir.h that DIRPB entries do.
 // Restated here are only the ones this file's ARITHMETIC leans on -- itod()/itoo() and
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 
     // IS THE DEVICE THAT BIG?  Read the last block before writing the first.  The drive's
     // size is MDNBLK, a constant of kernel/dev/md.c that no header exports to a program,
-    // and duplicating it here is exactly what ../TODO.md forbids -- so ask the device
+    // and duplicating it here is exactly what ../README.md forbids -- so ask the device
     // instead: mdstrategy() refuses blkno + wcount/MDTRACK > MDNBLK, so a read of the last
     // block answers the question and costs one exchange.  It catches three things at once:
     // a size larger than the drive, a drive nobody attached, and (under b6sim) a fixture

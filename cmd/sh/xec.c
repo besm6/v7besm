@@ -13,8 +13,14 @@
 // AND THE FALL-THROUGH FROM `case TCOM' INTO `case TFORK' IS HOW EVERY EXTERNAL COMMAND
 // GETS RUN.  TCOM handles a simple command; if it turns out not to be a built-in and
 // not to be a bare redirection, control drops into TFORK, which forks and execs it.
-// Inside v7's SWITCH/IN/ENDSW macros that was invisible.  It is marked below, with the
-// two smaller ones in the built-in switch.
+// Inside v7's SWITCH/IN/ENDSW macros that was invisible.  It is marked where it happens,
+// as are the two smaller ones in the built-in switch.
+//
+// AND THE FOUR BIG ARMS ARE FUNCTIONS OF THEIR OWN -- docom(), dofork(), dofor() and
+// doswitch() -- where v7 had them inline.  execute() recurses once per node of the parse
+// tree and a frame here is resident for every level of nesting, so its size is a limit on
+// how deeply a script may nest: 402 words inline, 99 split.  README.md, "The stack, and
+// what a nested script costs", is the account.
 //
 #include <signal.h>
 #include <sys/stat.h> // umask()
@@ -33,6 +39,359 @@ static INT parent;
 // ======== command execution ========
 
 //
+// A simple command: `case TCOM' of execute()'s switch, moved out whole.
+//
+// Returns non-zero when the command was a built-in and is finished with -- v7's `break'
+// out of the outer switch -- and zero when it must fall through into dofork(), which is
+// how every external command is run.  `comp' hands the argument vector back for that.
+// The built-ins run in THIS process: a child's chdir or assignment would die with it.
+//
+static INT docom(TREPTR t, STRING **comp, INT oldexit)
+{
+    STRING a1;
+    STRING *com;
+    INT argn, internal;
+    ARGPTR schain = gchain;
+    IOPTR io      = t->treio;
+
+    gchain = 0;
+    argn   = getarg((COMPTR)t);
+    *comp = com = scan(argn);
+    a1          = com[1];
+    gchain      = schain;
+
+    if ((internal = syslook(com[0], commands)) != 0 || argn == 0)
+        setlist(((COMPTR)t)->comset, 0);
+
+    if (argn == 0 || (flags & noexec) != 0) {
+        // Nothing to run: a bare redirection is still forked for, so that the `> f'
+        // happens; anything else is finished with.
+        return t->treio == 0;
+    }
+
+    // print command if execpr
+    if (flags & execpr) {
+        argn = 0;
+        prs(execpmsg);
+        while (com[argn] != ENDARGS) {
+            prs(com[argn++]);
+            blank();
+        }
+        newline();
+    }
+
+    switch (internal) {
+    case SYSDOT:
+        if (a1) {
+            INT f;
+
+            if ((f = pathopen(getpath(a1), a1)) < 0)
+                failed(a1, notfound);
+            else
+                execexp(0, f, 0);
+        }
+        break;
+
+    case SYSTIMES: {
+        // v7 read the four times into an L_INT[4] and passed that to times(), which
+        // takes a struct tms.  Same four words, but C11 wants the type it declared.
+        struct tms tb;
+        times(&tb);
+        prt(tb.tms_cutime);
+        blank();
+        prt(tb.tms_cstime);
+        newline();
+    } break;
+
+    case SYSEXIT:
+        exitsh(a1 ? stoi(a1) : oldexit);
+
+    case SYSNULL:
+        io = 0;
+        break;
+
+    case SYSCONT:
+        execbrk = -loopcnt;
+        break;
+
+    case SYSBREAK:
+        if ((execbrk = loopcnt) != 0 && a1)
+            breakcnt = stoi(a1);
+        break;
+
+    case SYSTRAP:
+        if (a1) {
+            BOOL clear;
+            if ((clear = digit(*a1)) == 0)
+                ++com;
+            while (*++com) {
+                INT i;
+                if ((i = stoi(*com)) >= MAXTRAP || i < MINTRAP) {
+                    failed(*com, badtrap);
+                } else if (clear) {
+                    clrsig(i);
+                } else {
+                    replace(&trapcom[i], a1);
+                    if (*a1)
+                        getsig(i);
+                    else
+                        ignsig(i);
+                }
+            }
+        } else {
+            // print out current traps
+            INT i;
+
+            for (i = 0; i < MAXTRAP; i++) {
+                if (trapcom[i]) {
+                    prn(i);
+                    prs(colon);
+                    prs(trapcom[i]);
+                    newline();
+                }
+            }
+        }
+        break;
+
+    case SYSEXEC:
+        com++;
+        initio(io);
+        ioset = 0;
+        io    = 0;
+        if (a1 == 0)
+            break;
+        // FALLTHROUGH -- `exec cmd' is `login'-style: never come back
+
+    case SYSLOGIN:
+        flags |= forked;
+        oldsigs();
+        execa(com);
+        done();
+
+    case SYSCD:
+        if (flags & rshflg)
+            failed(com[0], restricted);
+        else if ((a1 == 0 && (a1 = homenod.namval) == 0) || chdir(a1) < 0)
+            failed(a1, baddir);
+        break;
+
+    case SYSSHFT:
+        if (dolc < 1) {
+            error(badshift);
+        } else {
+            dolv++;
+            dolc--;
+        }
+        assnum(&dolladr, dolc);
+        break;
+
+    case SYSWAIT:
+        await(-1);
+        break;
+
+    case SYSREAD:
+        exitval = readvar(&com[1]);
+        break;
+
+    case SYSSET:
+        if (a1) {
+            INT argc;
+            argc = options(argn, com);
+            if (argc > 1)
+                setargs(com + argn - argc);
+        } else if (((COMPTR)t)->comset == 0) {
+            // scan name chain and print
+            namscan(printnam);
+        }
+        break;
+
+    case SYSRDONLY:
+        exitval = N_RDONLY;
+        // FALLTHROUGH -- readonly and export differ only in the flag bit
+
+    case SYSXPORT:
+        if (exitval == 0)
+            exitval = N_EXPORT;
+
+        if (a1) {
+            while (*++com)
+                attrib(lookup(*com), exitval);
+        } else {
+            namscan(printflg);
+        }
+        exitval = 0;
+        break;
+
+    case SYSEVAL:
+        if (a1)
+            execexp(a1, 0, &com[2]);
+        break;
+
+    case SYSUMASK:
+        if (a1) {
+            INT c, i;
+            i = 0;
+            while ((c = *a1++) >= '0' && c <= '7')
+                i = (i << 3) + c - '0';
+            umask(i);
+        } else {
+            INT i, j;
+            umask(i = umask(0));
+            prc('0');
+            for (j = 6; j >= 0; j -= 3)
+                prc(((i >> j) & 07) + '0');
+            newline();
+        }
+        break;
+
+    default:
+        internal = builtin(argn, com);
+    }
+
+    if (internal) {
+        if (io)
+            error(illegal);
+        chktrap();
+        return 1;
+    }
+    return 0;
+}
+
+//
+// Run something in a child process: `case TFORK', moved out whole.
+//
+// The parent half returns; the child half ends in done().  `type' says whether the child
+// has an argument vector to exec or a tree to walk.
+//
+static void dofork(TREPTR t, INT type, INT treeflgs, INT execflg, INT *pf1, INT *pf2, STRING *com)
+{
+    if (execflg && (treeflgs & (FAMP | FPOU)) == 0) {
+        parent = 0;
+    } else {
+        while ((parent = fork()) == -1) {
+            sigchk();
+            alarm(10);
+            pause();
+        }
+    }
+
+    if (parent) {
+        // This is the parent branch of fork; it may or may not wait for the child.
+        if (treeflgs & FPRS && flags & ttyflg) {
+            prn(parent);
+            newline();
+        }
+        if (treeflgs & FPCL)
+            closepipe(pf1);
+        if ((treeflgs & (FAMP | FPOU)) == 0)
+            await(parent);
+        else if ((treeflgs & FAMP) == 0)
+            post(parent);
+        else
+            assnum(&pcsadr, parent);
+
+        chktrap();
+        return;
+    }
+
+    // this is the forked branch (child) of execute
+    flags |= forked;
+    iotemp = 0;
+    postclr();
+    settmp();
+
+    // Turn off INTR and QUIT if `FINT'.  Reset remaining signals to parent except for
+    // those `lost' by trap.
+    oldsigs();
+    if (treeflgs & FINT) {
+        signal(INTR, SIG_IGN);
+        signal(QUIT, SIG_IGN);
+    }
+
+    // pipe in or out
+    if (treeflgs & FPIN) {
+        shrename(pf1[INPIPE], 0);
+        close(pf1[OTPIPE]);
+    }
+    if (treeflgs & FPOU) {
+        shrename(pf2[OTPIPE], 1);
+        close(pf2[INPIPE]);
+    }
+
+    // default std input for &
+    if (treeflgs & FINT && ioset == 0)
+        shrename(chkopen(devnull), 0);
+
+    // io redirection
+    initio(t->treio);
+    if (type != TCOM)
+        execute(((FORKPTR)t)->forktre, 1, 0, 0);
+    else if (com[0] != ENDARGS) {
+        setlist(((COMPTR)t)->comset, N_EXPORT);
+        execa(com);
+    }
+    done();
+}
+
+//
+// `for name in words; do ... done': `case TFOR', moved out whole.
+//
+static void dofor(TREPTR t)
+{
+    NAMPTR n = lookup(((FORPTR)t)->fornam);
+    STRING *args;
+    DOLPTR argsav = 0;
+
+    if (((FORPTR)t)->forlst == 0) {
+        args   = dolv + 1;
+        argsav = useargs();
+    } else {
+        ARGPTR schain = gchain;
+        gchain        = 0;
+        trim((args = scan(getarg(((FORPTR)t)->forlst)))[0]);
+        gchain = schain;
+    }
+    loopcnt++;
+    while (*args != ENDARGS && execbrk == 0) {
+        assign(n, *args++);
+        execute(((FORPTR)t)->fortre, 0, 0, 0);
+        if (execbrk < 0)
+            execbrk = 0;
+    }
+    if (breakcnt)
+        breakcnt--;
+    execbrk = breakcnt;
+    loopcnt--;
+    argfor = freeargs(argsav);
+}
+
+//
+// `case word in pattern) ... ;; esac': `case TSW', moved out whole.  v7 walked the arm
+// list through execute()'s own `t'; here it is this function's parameter.
+//
+static void doswitch(TREPTR t)
+{
+    STRING r = mactrim(((SWPTR)t)->swarg);
+
+    t = (TREPTR)((SWPTR)t)->swlst;
+    while (t) {
+        ARGPTR rex = ((REGPTR)t)->regptr;
+        while (rex) {
+            STRING s;
+            if (gmatch(r, s = macro(rex->argval)) || (trim(s), eq(r, s))) {
+                execute(((REGPTR)t)->regcom, 0, 0, 0);
+                t = 0;
+                break;
+            } else {
+                rex = ((ARGPTR)rex)->argnxt;
+            }
+        }
+        if (t)
+            t = (TREPTR)((REGPTR)t)->regnxt;
+    }
+}
+
+//
 // Walk one node of the parse tree and do what it says.  THE HEART OF THE SHELL.
 //
 // It recurses into the children, so running `if a; then b | c; fi' is one call per node.
@@ -48,10 +407,8 @@ static INT parent;
 //	TIF		if
 //	TSW		case
 //
-// TCOM does the built-ins itself in an inner switch -- cd, set, export and the rest have
-// to run in THIS process, since a child's chdir or assignment would be thrown away when
-// it exited.  Anything that is not a built-in falls through into TFORK and is run as a
-// separate program.
+// The four big arms are the functions above, so that this frame -- resident once per
+// level of nesting -- holds the dispatch and nothing else.
 //
 // `execflg' says the caller has no more use for this process, so the command may replace
 // it outright instead of forking -- what makes the last stage of a pipeline cheap.  pf1
@@ -67,11 +424,15 @@ INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
     STKPTR sav = savstak();
 
     sigchk();
+    deepchk();
 
     if ((t = argt) != 0 && execbrk == 0) {
         INT treeflgs;
         INT oldexit, type;
-        STRING *com;
+
+        // Set by docom() for the fall-through into dofork().  A TFORK node arriving
+        // there directly has a tree under it, not an argument vector.
+        STRING *com = 0;
 
         treeflgs = t->tretyp;
         type     = treeflgs & COMMSK;
@@ -79,283 +440,15 @@ INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
         exitval  = 0;
 
         switch (type) {
-        case TCOM: {
-            STRING a1;
-            INT argn, internal;
-            ARGPTR schain = gchain;
-            IOPTR io      = t->treio;
-            gchain        = 0;
-            argn          = getarg((COMPTR)t);
-            com           = scan(argn);
-            a1            = com[1];
-            gchain        = schain;
-
-            if ((internal = syslook(com[0], commands)) != 0 || argn == 0)
-                setlist(((COMPTR)t)->comset, 0);
-
-            if (argn && (flags & noexec) == 0) {
-                // print command if execpr
-                if (flags & execpr) {
-                    argn = 0;
-                    prs(execpmsg);
-                    while (com[argn] != ENDARGS) {
-                        prs(com[argn++]);
-                        blank();
-                    }
-                    newline();
-                }
-
-                switch (internal) {
-                case SYSDOT:
-                    if (a1) {
-                        INT f;
-
-                        if ((f = pathopen(getpath(a1), a1)) < 0)
-                            failed(a1, notfound);
-                        else
-                            execexp(0, f, 0);
-                    }
-                    break;
-
-                case SYSTIMES: {
-                    // v7 read the four times into an L_INT[4] and passed that to
-                    // times(), which takes a struct tms.  Same four words, but C11
-                    // wants the type it declared.
-                    struct tms tb;
-                    times(&tb);
-                    prt(tb.tms_cutime);
-                    blank();
-                    prt(tb.tms_cstime);
-                    newline();
-                } break;
-
-                case SYSEXIT:
-                    exitsh(a1 ? stoi(a1) : oldexit);
-
-                case SYSNULL:
-                    io = 0;
-                    break;
-
-                case SYSCONT:
-                    execbrk = -loopcnt;
-                    break;
-
-                case SYSBREAK:
-                    if ((execbrk = loopcnt) != 0 && a1)
-                        breakcnt = stoi(a1);
-                    break;
-
-                case SYSTRAP:
-                    if (a1) {
-                        BOOL clear;
-                        if ((clear = digit(*a1)) == 0)
-                            ++com;
-                        while (*++com) {
-                            INT i;
-                            if ((i = stoi(*com)) >= MAXTRAP || i < MINTRAP) {
-                                failed(*com, badtrap);
-                            } else if (clear) {
-                                clrsig(i);
-                            } else {
-                                replace(&trapcom[i], a1);
-                                if (*a1)
-                                    getsig(i);
-                                else
-                                    ignsig(i);
-                            }
-                        }
-                    } else {
-                        // print out current traps
-                        INT i;
-
-                        for (i = 0; i < MAXTRAP; i++) {
-                            if (trapcom[i]) {
-                                prn(i);
-                                prs(colon);
-                                prs(trapcom[i]);
-                                newline();
-                            }
-                        }
-                    }
-                    break;
-
-                case SYSEXEC:
-                    com++;
-                    initio(io);
-                    ioset = 0;
-                    io    = 0;
-                    if (a1 == 0)
-                        break;
-                    // FALLTHROUGH -- `exec cmd' is `login'-style: never come back
-
-                case SYSLOGIN:
-                    flags |= forked;
-                    oldsigs();
-                    execa(com);
-                    done();
-
-                case SYSCD:
-                    if (flags & rshflg)
-                        failed(com[0], restricted);
-                    else if ((a1 == 0 && (a1 = homenod.namval) == 0) || chdir(a1) < 0)
-                        failed(a1, baddir);
-                    break;
-
-                case SYSSHFT:
-                    if (dolc < 1) {
-                        error(badshift);
-                    } else {
-                        dolv++;
-                        dolc--;
-                    }
-                    assnum(&dolladr, dolc);
-                    break;
-
-                case SYSWAIT:
-                    await(-1);
-                    break;
-
-                case SYSREAD:
-                    exitval = readvar(&com[1]);
-                    break;
-
-                case SYSSET:
-                    if (a1) {
-                        INT argc;
-                        argc = options(argn, com);
-                        if (argc > 1)
-                            setargs(com + argn - argc);
-                    } else if (((COMPTR)t)->comset == 0) {
-                        // scan name chain and print
-                        namscan(printnam);
-                    }
-                    break;
-
-                case SYSRDONLY:
-                    exitval = N_RDONLY;
-                    // FALLTHROUGH -- readonly and export differ only in the flag bit
-
-                case SYSXPORT:
-                    if (exitval == 0)
-                        exitval = N_EXPORT;
-
-                    if (a1) {
-                        while (*++com)
-                            attrib(lookup(*com), exitval);
-                    } else {
-                        namscan(printflg);
-                    }
-                    exitval = 0;
-                    break;
-
-                case SYSEVAL:
-                    if (a1)
-                        execexp(a1, 0, &com[2]);
-                    break;
-
-                case SYSUMASK:
-                    if (a1) {
-                        INT c, i;
-                        i = 0;
-                        while ((c = *a1++) >= '0' && c <= '7')
-                            i = (i << 3) + c - '0';
-                        umask(i);
-                    } else {
-                        INT i, j;
-                        umask(i = umask(0));
-                        prc('0');
-                        for (j = 6; j >= 0; j -= 3)
-                            prc(((i >> j) & 07) + '0');
-                        newline();
-                    }
-                    break;
-
-                default:
-                    internal = builtin(argn, com);
-                }
-
-                if (internal) {
-                    if (io)
-                        error(illegal);
-                    chktrap();
-                    break;
-                }
-            } else if (t->treio == 0) {
+        case TCOM:
+            if (docom(t, &com, oldexit))
                 break;
-            }
-        }
             // FALLTHROUGH -- THE IMPORTANT ONE.  A simple command that is not a
             // built-in, and not a bare redirection, is run by forking here.
 
         case TFORK:
-            if (execflg && (treeflgs & (FAMP | FPOU)) == 0) {
-                parent = 0;
-            } else {
-                while ((parent = fork()) == -1) {
-                    sigchk();
-                    alarm(10);
-                    pause();
-                }
-            }
-
-            if (parent) {
-                // This is the parent branch of fork; it may or may not wait for the
-                // child.
-                if (treeflgs & FPRS && flags & ttyflg) {
-                    prn(parent);
-                    newline();
-                }
-                if (treeflgs & FPCL)
-                    closepipe(pf1);
-                if ((treeflgs & (FAMP | FPOU)) == 0)
-                    await(parent);
-                else if ((treeflgs & FAMP) == 0)
-                    post(parent);
-                else
-                    assnum(&pcsadr, parent);
-
-                chktrap();
-                break;
-
-            } else {
-                // this is the forked branch (child) of execute
-                flags |= forked;
-                iotemp = 0;
-                postclr();
-                settmp();
-
-                // Turn off INTR and QUIT if `FINT'.  Reset remaining signals to parent
-                // except for those `lost' by trap.
-                oldsigs();
-                if (treeflgs & FINT) {
-                    signal(INTR, SIG_IGN);
-                    signal(QUIT, SIG_IGN);
-                }
-
-                // pipe in or out
-                if (treeflgs & FPIN) {
-                    shrename(pf1[INPIPE], 0);
-                    close(pf1[OTPIPE]);
-                }
-                if (treeflgs & FPOU) {
-                    shrename(pf2[OTPIPE], 1);
-                    close(pf2[INPIPE]);
-                }
-
-                // default std input for &
-                if (treeflgs & FINT && ioset == 0)
-                    shrename(chkopen(devnull), 0);
-
-                // io redirection
-                initio(t->treio);
-                if (type != TCOM)
-                    execute(((FORKPTR)t)->forktre, 1, 0, 0);
-                else if (com[0] != ENDARGS) {
-                    setlist(((COMPTR)t)->comset, N_EXPORT);
-                    execa(com);
-                }
-                done();
-            }
+            dofork(t, type, treeflgs, execflg, pf1, pf2, com);
+            break;
 
         case TPAR:
             shrename(dup(2), output);
@@ -386,33 +479,9 @@ INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
                 execute(((LSTPTR)t)->lstrit, execflg, 0, 0);
             break;
 
-        case TFOR: {
-            NAMPTR n = lookup(((FORPTR)t)->fornam);
-            STRING *args;
-            DOLPTR argsav = 0;
-
-            if (((FORPTR)t)->forlst == 0) {
-                args   = dolv + 1;
-                argsav = useargs();
-            } else {
-                ARGPTR schain = gchain;
-                gchain        = 0;
-                trim((args = scan(getarg(((FORPTR)t)->forlst)))[0]);
-                gchain = schain;
-            }
-            loopcnt++;
-            while (*args != ENDARGS && execbrk == 0) {
-                assign(n, *args++);
-                execute(((FORPTR)t)->fortre, 0, 0, 0);
-                if (execbrk < 0)
-                    execbrk = 0;
-            }
-            if (breakcnt)
-                breakcnt--;
-            execbrk = breakcnt;
-            loopcnt--;
-            argfor = freeargs(argsav);
-        } break;
+        case TFOR:
+            dofor(t);
+            break;
 
         case TWH:
         case TUN: {
@@ -438,25 +507,9 @@ INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
                 execute(((IFPTR)t)->eltre, execflg, 0, 0);
             break;
 
-        case TSW: {
-            STRING r = mactrim(((SWPTR)t)->swarg);
-            t        = (TREPTR)((SWPTR)t)->swlst;
-            while (t) {
-                ARGPTR rex = ((REGPTR)t)->regptr;
-                while (rex) {
-                    STRING s;
-                    if (gmatch(r, s = macro(rex->argval)) || (trim(s), eq(r, s))) {
-                        execute(((REGPTR)t)->regcom, 0, 0, 0);
-                        t = 0;
-                        break;
-                    } else {
-                        rex = ((ARGPTR)rex)->argnxt;
-                    }
-                }
-                if (t)
-                    t = (TREPTR)((REGPTR)t)->regnxt;
-            }
-        } break;
+        case TSW:
+            doswitch(t);
+            break;
         }
         exitset();
     }

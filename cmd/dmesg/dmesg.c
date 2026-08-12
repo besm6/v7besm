@@ -8,7 +8,7 @@
 // Task C8's second, and the cheapest of the five: two kctl(2) calls and one kgetsym(3), no
 // device, no privilege, no argument.
 //
-// THE RING IS REAL AND ALWAYS HAS BEEN.  ../TODO.md used to say this program was waiting on
+// THE RING IS REAL AND ALWAYS HAS BEEN.  ../README.md used to say this program was waiting on
 // a kernel that kept one.  It was looking in kernel/prf.c; the ring is in kernel/dev/sc.c,
 // where putchar() writes each character of every kernel printf into msgbuf[MSGBUFS] and
 // advances msgbufp, wrapping at the end with no flag and no sentinel.  '\r' is filtered out

@@ -269,7 +269,7 @@ A sample usage of *more* in previewing wide output would be
 pr -t doc.txt | more -s
 
 *Note:* upstream's example pipes *nroff* output through *ul.* Neither program exists here and
-neither is coming: the typesetting suite is refused in cmd/TODO.md. The **-f**, **-l**, **-s**
+neither is coming: the typesetting suite is refused in cmd/README.md. The **-f**, **-l**, **-s**
 and **-u** options are still worth what they were -- **-u** in particular understands the
 `_\b` overstrike convention, whoever writes it.
 

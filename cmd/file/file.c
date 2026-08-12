@@ -5,7 +5,7 @@
 //
 //      file [ -f listfile ] file ...
 //
-// One of task C5f's seven (../TODO.md), and the one the task brief says gets a DELIBERATE
+// One of task C5f's seven (../README.md), and the one the task brief says gets a DELIBERATE
 // change rather than a faithful port.  ./README.md is the account; two of the changes are
 // worth having at the head of the source.
 //
@@ -46,7 +46,7 @@
 // and `as[]' was {globl, byte, even, text, data, bss, comm}: PDP-11 mnemonics and PDP-11 as
 // pseudo-ops.  They are b6as's now -- cmd/as/symtab.c's directives and cmd/as/tables.c's
 // Madlen mnemonics -- and `.even' is gone, a word machine having nothing to align to.
-// `troff output' went with them: ../TODO.md's exclusion table drops the whole typesetting
+// `troff output' went with them: ../README.md's exclusion table drops the whole typesetting
 // suite, so nothing here produces it.
 //
 // THREE READS PAST THE BOUND.  type(), lookup(), ccom() and ascom() share one file-scope

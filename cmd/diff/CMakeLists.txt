@@ -1,6 +1,6 @@
 # /bin/diff -- Unix v7 diff(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md).  diff.c's header is the account: the line hash, which was a
+# Task C5f (../README.md).  diff.c's header is the account: the line hash, which was a
 # 1's-complement sum in 16-bit hunks of a 32-bit long and had no mask of its own, so a long
 # line overflowed a 41-bit word here; readhash() answering 0 for BOTH end of file and a
 # legitimate hash; a shellsort that forms a pointer below its own array and detects it with a
@@ -19,7 +19,7 @@
 # integer vectors this program allocates over its input, §6's fourth ceiling.
 #
 # diff.1.umm is the manual page, and it covers diffh too; manview(1) formats it on the image
-# (../TODO.md C25a), and it is legible as it stands.
+# (../README.md C25a), and it is legible as it stands.
 #
 # NOT SETUID: it opens what the caller could open itself, and writes its temp file as the
 # caller too.

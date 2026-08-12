@@ -1,6 +1,6 @@
 # /bin/newgrp -- Unix v7 newgrp(1), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md).  SETUID ROOT, and the reason is narrower than su's: setgid(2) is
+# Task C6 (../README.md).  SETUID ROOT, and the reason is narrower than su's: setgid(2) is
 # allowed when u_rgid already matches or when suser() passes (kernel/sys4.c), and the whole
 # point of the program is to move to a group that is not the caller's -- so only the second
 # gate is available.  done() hands the privilege straight back with setuid(getuid()) before

@@ -1,6 +1,6 @@
 # `cmd/lex` — the lexical-analyser generator
 
-Tasks **C10b and C10d** ([`../TODO.md`](../TODO.md)): the host tool `b6lex`, the scanner skeleton
+Tasks **C10b and C10d** ([`../README.md`](../README.md)): the host tool `b6lex`, the scanner skeleton
 it copies, the `b6_lex()` CMake helper, and the same sources built a second time as the image's
 `/usr/bin/lex` with its skeleton at `/usr/lib/lex/ncform`.
 
@@ -26,7 +26,7 @@ beside it, and `NCH` on `ASCII`/`EBCDIC`. `b6cpp` predefines no `unix`, so **`NC
 and nothing here compiled**. That much was expected.
 
 What was not: **`CWIDTH` and `CMASK` are dead code.** They appear at their own `#define`s and
-nowhere else in 3,300 lines. So [`../TODO.md`](../TODO.md) was wrong to say this lex masks bit 7
+nowhere else in 3,300 lines. So [`../README.md`](../README.md) was wrong to say this lex masks bit 7
 off every input byte — it masks nothing, and the truth is worse. `NCH` was 128 while `gch()`
 returns a byte, so `parser.y`'s `symbol[c] = 1` inside a character class **wrote past
 `symbol[]` into `cindex[]` and `match[]`** on the first byte above `0177`. §11's worst shape is

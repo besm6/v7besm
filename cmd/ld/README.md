@@ -28,7 +28,7 @@ in [`test/`](test), which links it in-process and shells out to `b6as`/`b6ar` fo
 These same eight sources — plus the `cmd/libaout` files the linker calls — are built a
 **second** time, by the `b6*` cross toolchain, into `build/rootfs/usr/bin/ld`: the linker that
 runs on the machine, and with [`../as`](../as) and [`../cpp`](../cpp) the point of task **C9b**
-in [../TODO.md](../TODO.md). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build
+in [../README.md](../README.md). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build
 machinery, and there is **no second copy of any source**: what differs is a size profile in
 [`intern.h`](intern.h), keyed on the `besm6` macro `b6cpp` always predefines.
 

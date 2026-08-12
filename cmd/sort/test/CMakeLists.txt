@@ -11,7 +11,7 @@
 # -T points it at this directory instead, so a run leaves nothing on the host -- and, for the
 # mergemany case below, so the host could see it if anything were left.
 #
-# WHERE THE EXPECTATIONS CAME FROM.  ../TODO.md named sort as one of the two programs whose
+# WHERE THE EXPECTATIONS CAME FROM.  ../README.md named sort as one of the two programs whose
 # oracle should be a second implementation, on od's reasoning.  That is right for one reason
 # and wrong for another: sort's output is ordinary readable text, so a reviewer CAN check it
 # -- but v7's `+m.n' key syntax, its -d/-i tables, its tie-break rule and its numeric

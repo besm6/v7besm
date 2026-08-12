@@ -1,8 +1,8 @@
 # /bin/dd -- Unix v7 dd(1), built natively for the BESM-6.
 #
-# Task C4b (../TODO.md), and the first program on this image whose reason for existing is a
+# Task C4b (../README.md), and the first program on this image whose reason for existing is a
 # device rather than a file: dd is how anything gets copied to or from /dev/rmd0, which is
-# why TODO.md puts it ahead of mkfs(1) and fsck(1).  b6_prog() (../../scripts/BesmCross.cmake)
+# why README.md puts it ahead of mkfs(1) and fsck(1).  b6_prog() (../../scripts/BesmCross.cmake)
 # runs the b6* toolchain over dd.c, links it `crt0.o dd.o -lc -lruntime' against the libc
 # built in ../../lib, and stages the result as build/rootfs/bin/dd.
 #

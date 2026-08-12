@@ -21,7 +21,7 @@
 # not, which is the largest of the three dialect differences below.)  Shortening the page
 # with -l is what makes an expectation readable.
 #
-# WHERE THE EXPECTATIONS CAME FROM.  ../../TODO.md named pr as the one program left with
+# WHERE THE EXPECTATIONS CAME FROM.  ../../README.md named pr as the one program left with
 # od(1)'s property -- output no reviewer can check by eye -- and it is right, though not for
 # od's reason.  pr's output is ordinary text; what nobody can check is the WHITESPACE in it:
 # which run of spaces became a tab, which column a truncation fell in, how many blank lines

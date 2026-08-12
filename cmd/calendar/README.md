@@ -28,7 +28,7 @@ Checked before it was written, with the image's own `egrep` under `b6sim`: v7's 
 `calendar.christian` finds nothing for January and finds `10/18 Feast Day of St. Luke` for
 October; the fixed one finds `01/06* Epiphany`.
 
-## `case` crashes this shell, and that is the port's other deviation
+## `case` used to crash this shell, and that is why the script is shaped as it is
 
 v7's script is a `case $# in 0) … *) … esac`. Written that way it does not work here. Running
 `calendar -` on the booted machine produced `** SIGNAL 8 **`, then the shell's own message
@@ -56,14 +56,25 @@ Every piece works. What fails is the assembly, and only under one more level of 
   and it is what [`calendar.sh`](calendar.sh) ships.
 
 Moving `;;` onto a line of its own changes nothing, so it is not a `fi;;` tokenising problem.
-The shape of the failure — a corrupted data segment rather than a syntax error — and the fact
-that a single nesting level decides it point at [`../sh`](../sh)'s **4,096-word stack** and the
-recursion `execute()` does over the parse tree. It is written down as a task in
-[../TODO.md](../TODO.md) rather than fixed here.
 
-**Why no test caught it before.** [`../sh/test/`](../sh/test/) runs under `b6sim`, where no
-external program can be `exec`'d, so **no case in it contains a pipeline** — the one ingredient
-this needs. `case` itself is exercised, `while` is exercised, and the combination cannot be.
+**That reading was right, and task C29 fixed it.** The shape of the failure — a corrupted data
+segment rather than a syntax error — and the fact that a single nesting level decided it were the
+recursion `execute()` does over the parse tree against [`../sh`](../sh)'s **4,096-word stack**:
+one 402-word frame per level and eight levels of budget, with the overflow wrapping onto word 0
+rather than faulting. `execute()` is split into one function per arm now, the frame is 99 words,
+sixteen levels fit, and `deepchk()` refuses the seventeenth out loud.
+[`../sh/README.md`](../sh/README.md), "The stack, and what a nested script costs", is the account.
+
+**So the `case` form would work today.** [`calendar.sh`](calendar.sh) keeps its `if`/`else`
+anyway: it is one level shallower for no cost, it is what `kernel/test/multi` stages 18 to 22
+have been asserting since C23, and the shell's own regression tests are where the shape belongs —
+`kernel/test/multi` types the bare repro at root's prompt, and `sh/test/nest` nests twelve deep
+under `b6sim`.
+
+**Why no test caught it before.** Two reasons, and the second is the one that matters: the
+b6sim harness runs `env -i`, and a login shell's environment sits at the base of the very stack
+that ran out. This script measures 3,737 words of 4,096 with an empty environment — it would have
+passed under `b6sim` and it died on the machine.
 
 ## What the fallback is for
 

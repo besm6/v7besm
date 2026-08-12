@@ -5,7 +5,7 @@
 //
 //      tar {crtx}[vwlm]f archive [b factor] [name ...]
 //
-// Task C7 (../TODO.md), and the whole of it: one program, and the first thing on this image
+// Task C7 (../README.md), and the whole of it: one program, and the first thing on this image
 // that can move a TREE.  Everything before it -- dd, mkfs, fsck, mount -- moves BLOCKS.
 // ./README.md is the account; five things belong at the head of the source.
 //
@@ -48,7 +48,7 @@
 //
 // `f' IS MANDATORY AND THERE IS NO DEFAULT DEVICE.  v7 opened /dev/mt1 when told nothing, and
 // the digits 0-7 picked a tape drive.  This kernel has no tape driver and no bdevsw/cdevsw
-// row for one (../TODO.md's exclusion table), so the default named nothing and the digits
+// row for one (../README.md's exclusion table), so the default named nothing and the digits
 // named nothing.  Both are deleted rather than repointed at a disk: /dev/rmd0 is the pack the
 // system is RUNNING ON, and a one-character typo that rewrites it is not a default worth
 // having.  Say where the archive goes.
@@ -62,15 +62,16 @@
 // special defaults to RAWNBLOCK rather than 1; a `b' that physio() would refuse is refused
 // HERE, with a diagnostic, rather than surfacing as EFAULT through "tape write error"; and
 // `r' on a character special is refused outright, because backtape()'s 512-byte lseek is the
-// fourth rule and the fourth rule is the silent one.  ../TODO.md said `tar cf /dev/rmd0'
+// fourth rule and the fourth rule is the silent one.  ../README.md said `tar cf /dev/rmd0'
 // worked today.  It did not.
 //
 // THE `u' KEY IS DELETED.  It wrote a name/mtime index to /tmp and then ran
 //
 //      system("sort ... -o ...; awk '$1 != prev {print; prev=$1}' ... >...X; mv ...X ...")
 //
-// and binary-searched the result.  There is no awk on this image -- it is ../TODO.md's C10 --
-// so the dedup step would fail silently and leave `u' quietly wrong.  Rather than reimplement
+// and binary-searched the result.  There was no awk on this image when this port was written
+// -- task C10 put one there later -- so the dedup step would have failed silently and left `u'
+// quietly wrong.  Rather than reimplement
 // a shell pipeline in C for the one key v7's own manual page calls slow, the key goes, and
 // with it tfile, mktemp, system(), checkupdate(), lookup(), bsrch(), cmp(), low, high and
 // dorep()'s four strcat()s onto an UNINITIALISED stack buffer.  `r' still appends.

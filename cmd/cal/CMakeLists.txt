@@ -1,6 +1,6 @@
 # /bin/cal -- Unix v7 cal(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md), and the cheapest port in this directory since basename: no §2, no
+# Task C5f (../README.md), and the cheapest port in this directory since basename: no §2, no
 # §3, no §4, no §11 and no floating point.  cal.c's header says why that is not luck -- every
 # intermediate in jan1() was already bounded by a year clamped to 1..9999 -- and names the
 # three things that were fixed: pstr() stepping off both ends of its row, a file-scope table
@@ -11,7 +11,7 @@
 # build/rootfs/bin/cal.  It also registers rootfs_cal_size.
 #
 # cal.1.umm is the manual page, in the format ../../doc/Manual_Page_Format.md describes;
-# manview(1) formats it on the image (../TODO.md C25a), and it is legible as it stands.
+# manview(1) formats it on the image (../README.md C25a), and it is legible as it stands.
 #
 # NOT SETUID: it opens nothing at all.
 

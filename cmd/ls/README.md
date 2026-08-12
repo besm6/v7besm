@@ -5,7 +5,7 @@
 that is **not a host tool** — nothing here runs on the build machine.
 
 **The source is 4.2BSD's, taken from RetroBSD** (`src/cmd/ls/ls.c`), which is the same upstream
-[`../TODO.md`](../TODO.md) C10 takes `yacc` and `lex` from: 4.2BSD's program with the ANSI pass
+[`../README.md`](../README.md) C10 takes `yacc` and `lex` from: 4.2BSD's program with the ANSI pass
 already done. It replaces the v7 `ls` this directory carried before, and what it buys is what v7
 never had — **multi-column output on a terminal**, `-F`, `-R`, `-A`, `-1`, `-q`, and the password
 and group files reached through `getpwuid(3)`/`getgrgid(3)` instead of parsed by hand.

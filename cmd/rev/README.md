@@ -1,6 +1,6 @@
 # `rev` reverses characters, and v7's reversed bytes
 
-`/bin/rev` is one of task C5a's six ([../TODO.md](../TODO.md)) and the only one of them that
+`/bin/rev` is one of task C5a's six ([../README.md](../README.md)) and the only one of them that
 is **not a faithful port**. [../README.md](../README.md) §10 allows a divergence and asks for
 it to be written down twice — in the source and in the manual page; this file is the third
 place, because the divergence is about something bigger than `rev`.

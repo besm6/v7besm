@@ -1,6 +1,6 @@
 # /bin/sort -- Unix v7 sort(1), built natively for the BESM-6.
 #
-# Task C5d (../TODO.md), the sixteenth of the text filters and the first program here that
+# Task C5d (../README.md), the sixteenth of the text filters and the first program here that
 # claims the whole heap.  sort.c's header is the account: the five 256-byte tables v7 rotated
 # by 128 so a signed char could index them, which on a machine with unsigned chars read up to
 # 128 bytes past each of them; what -d and -i then have to mean for a byte above 0177, which

@@ -37,7 +37,7 @@ is the only way out.
 
 These same sources — plus the `cmd/libaout` files `ar` calls — are built a **second** time, by
 the `b6*` cross toolchain, into `build/rootfs/usr/bin/ar`: task **C9d** in
-[../TODO.md](../TODO.md), with [`../ranlib`](../ranlib).
+[../README.md](../README.md), with [`../ranlib`](../ranlib).
 [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build machinery, and there is **no second
 copy of any source**.
 
@@ -92,7 +92,7 @@ so `ar` is the second program here after `strip` that wants the writable `/tmp`
 
 ### Descriptors, and a correction to the TODO
 
-[../TODO.md](../TODO.md) framed `_NFILE` as this program's stdio-buffer problem, the way
+[../README.md](../README.md) framed `_NFILE` as this program's stdio-buffer problem, the way
 `ld`'s twelve open streams were. **That is not what is true here.** `ar` opens *no* `FILE`:
 every archive, temporary and member file is a raw descriptor, and the only stdio in the program
 is `printf`/`fprintf` on the two streams `crt0` provides. What binds is the *descriptor* count,

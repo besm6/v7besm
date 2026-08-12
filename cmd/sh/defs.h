@@ -541,6 +541,7 @@ extern MSG badopt;     // "bad option(s)"
 extern MSG badparam;   // "parameter not set" -- from ${x?} or -u
 extern MSG badsub;     // "bad substitution" -- a malformed ${...}
 extern MSG nospace;    // "no space" -- out of memory
+extern MSG toodeep;    // "too deep" -- out of machine stack (deepchk)
 extern MSG notfound;   // "not found" -- no such command on PATH
 extern MSG badtrap;    // "bad trap" -- a signal number out of range
 extern MSG baddir;     // "bad directory" -- cd failed
@@ -625,6 +626,13 @@ void exitset(void);
 // Give up if a signal has fired and there is no trap to handle it.  Called at every
 // point where stopping is safe.
 void sigchk(void);
+
+// Give up if the recursion over the parse tree has used the MACHINE stack up.  Called
+// from execute() and cmd(), the two functions that recurse with the script's nesting.
+void deepchk(void);
+
+// The bottom of the machine stack, which deepchk() measures against.
+extern STKPTR stackfloor; // main.c
 
 // Print "sh: s1: s2" and abandon the command.  DOES NOT RETURN.
 _Noreturn void failed(STRING s1, STRING s2);

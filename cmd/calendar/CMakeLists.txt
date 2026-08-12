@@ -1,4 +1,4 @@
-# calendar -- Unix v7 calendar(1), the reminder service.  Task C23 (../TODO.md);
+# calendar -- Unix v7 calendar(1), the reminder service.  Task C23 (../README.md);
 # README.md beside this file is the account.
 #
 # TWO HALVES AND ONLY ONE OF THEM IS COMPILED.  /usr/lib/calendar is the C program below,

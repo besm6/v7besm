@@ -1,6 +1,6 @@
 # /bin/look -- Unix v7 look(1), built natively for the BESM-6, and /usr/dict/words with it.
 #
-# One of task C5b's seven (../TODO.md).  look.c's header is the account: the two-argument
+# One of task C5b's seven (../README.md).  look.c's header is the account: the two-argument
 # puts() that does not compile here, the three unbounded writes §6 asks every port to bound,
 # and the rule this port takes for -d and -f over a byte above 0177.
 #

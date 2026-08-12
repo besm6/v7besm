@@ -6,7 +6,7 @@ the top-level `make install` copies the tree to `<prefix>/share/besm6/include`, 
 appends to every preprocessor run. So a source with no `-I` of its own still finds
 `<string.h>`, and one built in the tree gets the same files it would after installation.
 
-**The tree is also on the disk image, as `/usr/include`** (task C9e, [../cmd/TODO.md](../cmd/TODO.md)),
+**The tree is also on the disk image, as `/usr/include`** (task C9e, [../cmd/README.md](../cmd/README.md)),
 because the machine's own `/usr/bin/cc` appends *that* directory for the same reason. It is
 staged from the **source** tree rather than from an installed copy — the top-level
 `CMakeLists.txt`'s `B6_STAGE_INC` — so an edit here reaches the image without an install; the

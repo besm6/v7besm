@@ -106,7 +106,7 @@ stops it.
 
 ## The filter, and §11
 
-`crypt` must carry eight bits, which is what `../TODO.md` singled the task out for — and the
+`crypt` must carry eight bits, which is what `../README.md` singled the task out for — and the
 port answers it by **never looking at a byte**. v7 ran the rotor inline over
 `getchar()`/`putchar()`; this reads a block, hands the block to `crblock()` and writes it back:
 

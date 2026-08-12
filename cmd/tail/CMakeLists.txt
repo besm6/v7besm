@@ -1,7 +1,7 @@
 # /bin/tail -- Unix v7 tail(1), built natively for the BESM-6.
 #
-# One of task C5b's seven (../TODO.md).  tail.c's header is the account: the `int errno;' that
-# had to be deleted rather than renamed, the `-b' unit that ../TODO.md left to this task and
+# One of task C5b's seven (../README.md).  tail.c's header is the account: the `int errno;' that
+# had to be deleted rather than renamed, the `-b' unit that ../README.md left to this task and
 # which is BSIZE here rather than the PDP-11's 512, and the argument shuffle that formed a
 # pointer before the start of argv.
 #

@@ -3,7 +3,7 @@
 # EVERYTHING du DOES IS A DIRECTORY READ, and b6sim cannot serve one: it maps read(2) onto
 # the host, where a directory descriptor refuses to be read at all.
 #
-# du IS ON opendir(3) SINCE ../../TODO.md TASK C24, AND THAT CHANGED NOTHING HERE.  The reason
+# du IS ON opendir(3) SINCE ../../README.md TASK C24, AND THAT CHANGED NOTHING HERE.  The reason
 # is worth knowing before anybody tries again: on the host, open(2) and fstat(2) on a directory
 # both SUCCEED and only read(2) refuses, so under b6sim opendir() hands back a perfectly good
 # DIR and the first readdir() returns NULL.  Every directory reads as empty, in exactly the way

@@ -3,9 +3,10 @@
 # b6sim runs one BESM-6 a.out and services its syscalls on the host, which is enough to
 # drive the shell's lexer, parser, macro expansion, name tree, control flow and
 # built-ins -- and, underneath all of them, the arena and the expression stack, which is
-# where this port's BESM-6 pointer work lives.  It is NOT enough to reach fork, exec,
-# pipes, file redirection, globbing or traps; ../README.md says why, one by one.  Those
-# need the real kernel under SIMH, where the shell now runs but no test drives them yet.
+# where this port's BESM-6 pointer work lives.  It reaches fork, exec and pipes too
+# (SYS_fork, SYS_exece and SYS_pipe are real host calls in cmd/sim/syscall.cpp), which is
+# what script.sh runs on; what it cannot give is a terminal, and with it the interactive
+# paths, job control and traps.  Those need the real kernel under SIMH.
 #
 # The fixtures are commented with `#'.  That needed word.c to grow a comment character
 # first: v7's shell had none, and the stand-in -- a `:' line -- has its words really
@@ -64,3 +65,17 @@ b6_shtest(utf8)
 # space, because the memory fault v7 relied on to grow the arena mid-push is not
 # something b6sim can deliver.
 b6_shtest(nospace)
+
+# Task C29, and the two ends of the MACHINE stack -- the other stack, the one the C
+# calls run on, which nothing but the shell itself can check (../README.md, "The stack").
+# nest guards the ceiling that the split of execute() bought: twelve levels of nesting,
+# where the shell before it died at nine and died silently, having wrapped onto word 0
+# and rewritten its own const image.  toodeep guards the diagnostic at the far end, an
+# `eval' that evals itself for ever.
+b6_shtest(nest)
+b6_shtest(toodeep)
+
+# And the limit C29 turned out to share a cause with: a pipeline of four stages inside a
+# command substitution, which task C8 recorded as an undiagnosed `SIGNAL 4' and which is
+# the same stack running out one frame lower down.
+b6_shtest(subpipe)

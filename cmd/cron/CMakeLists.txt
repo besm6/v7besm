@@ -1,4 +1,4 @@
-# /etc/cron -- Unix v7 cron(8), built natively for the BESM-6.  Task C22 (../TODO.md);
+# /etc/cron -- Unix v7 cron(8), built natively for the BESM-6.  Task C22 (../README.md);
 # README.md beside this file is the account.
 #
 # /etc AND NOT /bin, which is v7's placement and cron.8.umm's SYNOPSIS: it is not a command a

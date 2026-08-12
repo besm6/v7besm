@@ -8,7 +8,7 @@ Build with `make`; the engine is covered by unit tests in `test/`.
 These same eight sources — plus the `cmd/libaout` files the assembler calls — are built a
 **second** time, by the `b6*` cross toolchain, into `build/rootfs/usr/bin/as`: the assembler
 that runs on the machine, and the second step of self-hosting (task **C9b** in
-[../TODO.md](../TODO.md); `cpp` was C9a). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the
+[../README.md](../README.md); `cpp` was C9a). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the
 build machinery, and there is **no second copy of any source**: what differs is a size profile
 in [`as.h`](as.h), keyed on the `besm6` macro `b6cpp` always predefines.
 

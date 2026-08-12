@@ -70,7 +70,7 @@
 #include <unistd.h>
 
 // What this file's arithmetic assumes of the layout, asserted rather than re-derived
-// (../TODO.md, task C4).  The headers carry the rest.
+// (../README.md, task C4).  The headers carry the rest.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
 _Static_assert(INOPB * sizeof(struct dinode) == BSIZE, "INOPB dinodes must tile a block");
 _Static_assert(DIRPB * sizeof(struct direct) == BSIZE, "DIRPB entries must tile a block");

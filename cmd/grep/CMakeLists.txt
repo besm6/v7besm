@@ -1,4 +1,4 @@
-# grep(1) -- task C5c, the fourteenth of cmd/TODO.md's text filters.
+# grep(1) -- task C5c, the fourteenth of the text filters.
 #
 # The task the CCL bitmap belongs to: v7 packs a character class into 128 bits, and this
 # machine's text is UTF-8 end to end (../README.md SS11), so it is 256 here.  That closed a

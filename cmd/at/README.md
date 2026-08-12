@@ -15,7 +15,7 @@ neither would have worked.
 
 ## What C21 was blocked on, and why the blocker was mostly imaginary
 
-[`../TODO.md`](../TODO.md) held this task back for a clock, on the grounds that `iinit()`
+[`../README.md`](../README.md) held this task back for a clock, on the grounds that `iinit()`
 seeds `time` from the root superblock's `s_time` "and nothing advances it but the interval
 timer". Two-thirds of that is wrong, and the wrong two-thirds is the part that mattered:
 
@@ -34,7 +34,7 @@ SIMH `expect` action that types the host's wall clock at the first prompt, run b
 [`../../kernel/unix.ini`](../../kernel/unix.ini) and by
 [`../../kernel/test/multi.ini`](../../kernel/test/multi.ini). What C21 really cost was
 noticing that the premise was worth checking. **C22 and C23 are unblocked by the same
-finding**, and `../TODO.md` says so now.
+finding**, and `../README.md` says so now.
 
 The one thing that had to be measured rather than assumed: **`%%VAR%%` does not defer a SIMH
 substitution**. SCP expands `%VAR%` when it *reads* a line, so a `send` written into a rule

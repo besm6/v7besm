@@ -6,7 +6,7 @@
 # (aout); the archive rebuild is done in-process via cmd/ar's archiver library.
 #
 # The same sources are built a SECOND time, for the machine itself, into
-# build/rootfs/usr/bin/ranlib -- see rootfs/, and task C9d in ../TODO.md.  There
+# build/rootfs/usr/bin/ranlib -- see rootfs/, and task C9d in ../README.md.  There
 # is no native `archiver' library, so that build names cmd/ar's five engine
 # sources itself and the program carries the whole archiver.
 #

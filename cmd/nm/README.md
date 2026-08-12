@@ -26,7 +26,7 @@ machine's: the BESM-6 `a.out` has a fourth segment the PDP-11 had not.
 
 These same sources — plus the `cmd/libaout` files `nm` calls — are built a **second** time, by
 the `b6*` cross toolchain, into `build/rootfs/usr/bin/nm`: task **C9c** in
-[../TODO.md](../TODO.md), with [`../size`](../size), [`../strip`](../strip) and
+[../README.md](../README.md), with [`../size`](../size), [`../strip`](../strip) and
 [`../disasm`](../disasm). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build
 machinery, and there is **no second copy of any source**.
 

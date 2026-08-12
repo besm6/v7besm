@@ -1,6 +1,6 @@
 # /bin/join -- Unix v7 join(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md).  join.c's header is the account: NFLD enforced nowhere, so a line of
+# Task C5f (../README.md).  join.c's header is the account: NFLD enforced nowhere, so a line of
 # more than twenty fields ran out of its own row and into the next; a line with no final
 # newline read past itself, which v7 records in a comment and does nothing about; a join
 # field past the end of a line handed NULL to strcmp() and to printf("%s"); and file 2 being

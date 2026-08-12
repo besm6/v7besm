@@ -1,4 +1,4 @@
-# /bin/mail -- Unix v7 mail(1).  Task C28 (../TODO.md); ./README.md is the account.
+# /bin/mail -- Unix v7 mail(1).  Task C28 (../README.md); ./README.md is the account.
 #
 # SETUID ROOT (../README.md SS8), and the seventh program on this image to carry the bit.
 # deliver() appends to another user's 0644 mailbox, chown(2)s a new one -- suser()-gated --

@@ -30,7 +30,7 @@ What did change is the C either side of it: `y2.c` emits `int yylex(void);` and
 
 ## `defs` was not quite §1's trap
 
-[TODO.md](../TODO.md) expected the classic one — a v7 program defining its globals in a header
+[README.md](../README.md) expected the classic one — a v7 program defining its globals in a header
 the PDP-11 linker merged. `defs` does not: every shared object is already `extern` there and
 `main.c` defines it. What it *did* have was a dozen `extern` declarations buried inside function
 bodies and three globals in `files.c` that were never `static`. Those moved to `defs.h`, and

@@ -4,7 +4,7 @@ The format is [`doc/Manual_Page_Format.md`](../../doc/Manual_Page_Format.md). Th
 page into it, and then holds the result to it.
 
 **It is not a run-once tool.** The pages this tree already carried were the first job, not the only
-one: every v7 program still to be ported ([`../TODO.md`](../TODO.md) C10–C24, and the unported
+one: every v7 program still to be ported ([`../README.md`](../README.md) C10–C24, and the unported
 pages already sitting in [`../awk/`](../awk/), [`../make/`](../make/) and the rest) arrives with a
 roff page that has to become a `.umm`. §"The procedure" below is how.
 

@@ -1,6 +1,6 @@
 # /bin/basename -- Unix v7 basename(1), built natively for the BESM-6.
 #
-# One of task C2b's five (../TODO.md): a cmd/ subdirectory that is NOT a host tool.
+# One of task C2b's five (../README.md): a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over basename.c, links it
 # `crt0.o basename.o -lc -lruntime' against the libc built in ../../lib, and stages the
 # result as build/rootfs/bin/basename.  Added from inside the top-level libruntime guard,

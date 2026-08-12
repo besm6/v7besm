@@ -1,4 +1,4 @@
-# /usr/lib/makekey -- Unix v7 makekey(8).  Task C19 (../TODO.md), and the second program
+# /usr/lib/makekey -- Unix v7 makekey(8).  Task C19 (../README.md), and the second program
 # on this image outside /bin, ../diffh being the first: it is not a command a user types.
 #
 # IT HAS NO CALLER ON THE IMAGE, deliberately.  v7's crypt(1) and ed(1) forked it because

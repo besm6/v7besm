@@ -89,12 +89,16 @@ Everything above is built and most of it is tested: `make run` is the whole suit
 
 ## What is missing
 
-A **C compiler on the machine**. `yacc` and `lex` are no longer missing — they are host tools
-and `/usr/bin` programs both, and `expr`, `egrep` and `m4` are built from their grammars here,
-so the three that are left (`make`, `bc`, `awk`) are ordinary ports now. `at`, `cron`
-and `calendar` need a clock the hardware has not got. The typesetting
-suite, tape utilities, `uucp` and the PDP-11 compiler internals are not coming at all, and
-[cmd/TODO.md](cmd/TODO.md) says why for each. The kernel has no work plan left; its reference is
+A **C compiler on the machine**, and only that. `cpp`, `as`, `ld`, `yacc`, `lex` and the binutils
+are host tools and `/usr/bin` programs both, but `/usr/bin/cc` cannot compile C and says so: the
+three passes between them — `b6parse`, `b6lower`, `b6codegen` — come from an external compiler
+that cannot be built for this target.
+
+Everything else is either here or deliberately refused: the typesetting suite, the tape
+utilities, `uucp`, `adb` and the PDP-11 compiler internals are not coming, and
+[cmd/README.md](cmd/README.md)'s *"Not ported, and why"* table says why for each — one row per
+decision, with the line count so it can be re-costed. **Neither `cmd/` nor the kernel has a work
+plan left**; their references are [cmd/README.md](cmd/README.md) and
 [doc/Besm6_Kernel_Reference.md](doc/Besm6_Kernel_Reference.md).
 
 ## Repository layout

@@ -15,7 +15,7 @@
 // `((n-1)/NI + 2) * (long)512' with NI = BSIZE/sizeof(struct dinode), and the offset within
 // it as `(n-1)%NI'.  All three constants are wrong here and none of them needs to be
 // rewritten by hand: <sys/param.h> has itod() and itoo(), which are the same expressions
-// with the layout in ONE home (../TODO.md's rule for on-disk constants).  Checked at the
+// with the layout in ONE home (../README.md's rule for on-disk constants).  Checked at the
 // boundaries -- itod(1) == 1, itoo(1) == 0, itod(INOPB+1) == 2, itoo(INOPB+1) == 0 -- so
 // this is a re-spelling and not a change of behaviour.
 //
@@ -64,7 +64,7 @@
 #include <unistd.h>
 
 // What this file's arithmetic assumes of the layout, asserted rather than re-derived
-// (../TODO.md, task C4).  sys/ino.h carries the rest.
+// (../README.md, task C4).  sys/ino.h carries the rest.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
 _Static_assert(INOPB * sizeof(struct dinode) == BSIZE, "INOPB dinodes must tile a block");
 

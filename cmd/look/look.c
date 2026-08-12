@@ -5,7 +5,7 @@
 //
 //      look [ -dft ] string [ file ]
 //
-// One of task C5b's seven (../TODO.md).  No §2 in it; six `long's that are one word here
+// One of task C5b's seven (../README.md).  No §2 in it; six `long's that are one word here
 // (§3); and four things that had to change, of which the last is the one that decides how
 // this program can be tested at all.
 //

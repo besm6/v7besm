@@ -3,7 +3,7 @@
 //
 //      manview [ -p ] [ -m ] [ -w cols ] [ file ... ]
 //
-// Task C25a (../TODO.md), and the thing man(1) has been arranged around since C25b: the one
+// Task C25a (../README.md), and the thing man(1) has been arranged around since C25b: the one
 // FORMATTER line in ../man/man.c is what puts this program between a page and the pager.
 //
 // ATTRIBUTES ARE ON BY DEFAULT AND ARE NOT CONDITIONED ON isatty(2), which is the one

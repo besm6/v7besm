@@ -31,7 +31,7 @@ links it in-process.
 
 These same sources — plus the `cmd/libaout` files `size` calls — are built a **second** time, by
 the `b6*` cross toolchain, into `build/rootfs/usr/bin/size`: task **C9c** in
-[../TODO.md](../TODO.md), with [`../nm`](../nm), [`../strip`](../strip) and
+[../README.md](../README.md), with [`../nm`](../nm), [`../strip`](../strip) and
 [`../disasm`](../disasm). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build
 machinery, and there is **no second copy of any source**.
 

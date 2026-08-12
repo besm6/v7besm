@@ -1,11 +1,10 @@
 #
 # /bin/more -- Berkeley's pager (Eric Shienbrood, UCB), and /bin/less beside it.
-# Task C27 (../TODO.md).
+# Task C27 (../README.md).
 #
 # THE SECOND PROGRAM HERE THAT IS NOT A PORT OF A v7 COMMAND.  There was no pager in
-# the v7 source tree at all -- more(1) is 3BSD's -- so there is no row for it in
-# ../TODO.md's table of v7 programs still to port, exactly as there is none for
-# cmd/novi.  The source is RetroBSD's src/cmd/more/more.c; the older UCB lineage that
+# the v7 source tree at all -- more(1) is 3BSD's -- so it never had a row among the v7
+# programs to port, exactly as cmd/novi never had one.  The source is RetroBSD's src/cmd/more/more.c; the older UCB lineage that
 # sits in the git-ignored cmd/tmp was read and not built from.
 #
 # THE FIRST CALLER OF b6_prog()'s `LIBS' KEYWORD, which ../../lib/libcurses/README.md

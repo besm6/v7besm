@@ -542,7 +542,7 @@ set_tests_properties(rootimg_link_more PROPERTIES LABELS kernel)
 # cores.  RUN_SERIAL is ctest's "start nothing else while this runs", which is the property
 # that actually matches the requirement.  It costs a few seconds of total wall clock, since
 # neither can overlap anything; that is the price of a boot dialogue meaning what it says.
-# ../TODO.md task 35 has the two bugs that were found underneath it.
+# ../README.md task 35 has the two bugs that were found underneath it.
 #
 # `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
 # GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  The generation

@@ -5,7 +5,7 @@
 //
 //      pr [ -n ] [ +n ] [ -h header ] [ -wn ] [ -ln ] [ -t ] [ -sc ] [ -m ] [ file ] ...
 //
-// The first of task C5f's seven (../TODO.md), and the last of the four "deciding" programs
+// The first of task C5f's seven (../README.md), and the last of the four "deciding" programs
 // ../README.md §2 has been counting byte cursors in.  README.md for the account; what is
 // worth having at the head of the source is why the two odd-looking things here are right.
 //

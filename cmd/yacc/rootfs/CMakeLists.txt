@@ -2,7 +2,7 @@
 # Two things live here.
 #
 # /usr/bin/yacc and /usr/lib/yaccpar -- cmd/yacc built a SECOND time, natively for
-# the BESM-6 (task C10c, ../../TODO.md).  The sources are the host tool's own; the
+# the BESM-6 (task C10c, ../../README.md).  The sources are the host tool's own; the
 # only thing that differs is the size profile in ../dextern.h keyed on `besm6'.
 # ../README.md, "Building for the BESM-6".
 #
@@ -50,7 +50,7 @@ b6_progtest(calct recover  DEST test/calct)
 b6_progtest(calct eightbit DEST test/calct)
 
 # calcu -- the same calculator over a %union, so the skeleton's three value copies
-# are aggregate copies.  ../README.md, "The contract"; ../../TODO.md, C14.
+# are aggregate copies.  ../README.md, "The contract"; ../../README.md, C14.
 b6_yacc(CALCU_SRC calcu ${CMAKE_CURRENT_SOURCE_DIR}/calcu.y)
 b6_prog(calcu DEST test/calcu SOURCES ${CALCU_SRC})
 

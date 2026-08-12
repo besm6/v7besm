@@ -3,7 +3,7 @@
 # SEVEN LITERALS AND ONE ORACLE.  The literals are the empty tables, and they are literals
 # because b6sim's imitation kernel leaves inode, file, text, mount, coremap, swapmap and sc
 # ZERO on purpose -- "a plausible fiction is worse than an empty one", cmd/sim/kernel.h.  So
-# this half of pstat's testing is exactly what ../TODO.md asked it to be: the flags, and the
+# this half of pstat's testing is exactly what ../README.md asked it to be: the flags, and the
 # empty-table output.  Two of them do more than that:
 #
 #   `tty' pins NSC and the 29-word stride of struct tty at once -- two rows and no more.

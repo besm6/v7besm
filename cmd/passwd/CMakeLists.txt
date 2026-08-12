@@ -1,6 +1,6 @@
 # /bin/passwd -- Unix v7 passwd(1), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md), and the only program on this image that WRITES /etc/passwd.  SETUID
+# Task C6 (../README.md), and the only program on this image that WRITES /etc/passwd.  SETUID
 # ROOT: the file is 0644 and root's, so nothing unprivileged could put a new hash in it.
 # The bit is one line of ../../root.manifest and nothing else (../README.md §8).
 #

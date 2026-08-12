@@ -1,6 +1,6 @@
 # /bin/mesg -- Unix v7 mesg(1), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md).  A stat() and a chmod() on ttyname(2), and the other half of
+# Task C6 (../README.md).  A stat() and a chmod() on ttyname(2), and the other half of
 # cmd/write: it is what decides whether a write(1) is refused.
 #
 # NOT SETUID, and this one is worth stating twice.  chmod(2) is gated on owner()

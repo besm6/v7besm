@@ -5,7 +5,7 @@
 //
 //      sort [ -mubdfinctx ] [ +pos1 [ -pos2 ] ] ... [ -o name ] [ -T dir ] [ name ] ...
 //
-// Task C5d (../TODO.md), the sixteenth of the text filters and the heavyweight of the phase:
+// Task C5d (../README.md), the sixteenth of the text filters and the heavyweight of the phase:
 // it manages its own storage, runs its own merge over temp files, and catches four signals to
 // clean them up.  §1's C11 pass is mechanical and is not described here.  What the port had
 // to decide is below, worst first; ./README.md is the long form.

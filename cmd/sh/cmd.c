@@ -82,6 +82,10 @@ TREPTR cmd(INT sym, INT flg)
 {
     TREPTR i, e;
 
+    // cmd -> list -> term -> item -> cmd, once per level of nesting: the parser runs out
+    // of machine stack the same way execute() does, and just as silently.
+    deepchk();
+
     i = list(flg);
 
     if (wdval == NL) {

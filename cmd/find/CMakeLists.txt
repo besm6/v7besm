@@ -1,6 +1,6 @@
 # /bin/find -- Unix v7 find(1), built natively for the BESM-6.
 #
-# Task C5f (../TODO.md), the largest of its seven, and THE ONLY ONE WITH NO test/ DIRECTORY
+# Task C5f (../README.md), the largest of its seven, and THE ONLY ONE WITH NO test/ DIRECTORY
 # -- the second program in cmd/ after mount/umount that b6sim can say nothing at all about.
 # It reads directory descriptors, which the simulator refuses; it popen()s pwd, which would
 # fork the BUILD MACHINE's shell; and -exec fork/execvp's, which under b6sim would run the

@@ -4,7 +4,7 @@ Task C5d, the sixteenth of the text filters and the last of the ones that were s
 cheap. `../README.md` §1's C11 pass is mechanical and is not repeated here; what follows is
 what the port *taught*, worst first.
 
-The brief in [../TODO.md](../TODO.md) predicted the expensive part would be §2 — fifteen
+The brief in [../README.md](../README.md) predicted the expensive part would be §2 — fifteen
 `char *` comparisons inside the routine that decides the whole output. The count was right and
 the prediction was wrong: those comparisons compile correctly and cost nothing but time. What
 actually cost the day was two things no line count could have named.

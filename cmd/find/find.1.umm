@@ -102,7 +102,7 @@ filesystem block is three of them.
 
 **-cpio** is gone. It wrote a cpio(5) archive out of 16-bit quantities, through a run-time
 byte-order probe, and prompted on **/dev/tty** for the next magnetic tape reel when the output
-filled. There is no tape drive on this machine and no driver for one, and *cmd/TODO.md*
+filled. There is no tape drive on this machine and no driver for one, and *cmd/README.md*
 excludes the whole of v7's tape software; an archive nothing here can read is not a service.
 *Find* diagnoses **-cpio** as an unknown primary rather than ignoring it.
 

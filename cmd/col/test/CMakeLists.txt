@@ -1,6 +1,6 @@
-# col's b6sim cases -- task C5b.  No fixture and no file: col opens nothing at all, which is
-# also the correction ../TODO.md wants -- it lists col as needing the file-oracle harness
-# tee(1) and split(1) use, and col writes only to standard output.
+# col's b6sim cases -- task C5b.  No fixture and no file: col opens nothing at all, where the
+# task list had expected it to want the file-oracle harness tee(1) and split(1) use.  It
+# writes only to standard output.
 #
 # `utf8' IS THE DIVERGENCE AND IT IS THE POINT OF THIS DIRECTORY.  v7's col steals bit 0200
 # of every stored character for the Model 37 Teletype's Greek half-shift and masks its input

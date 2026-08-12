@@ -64,7 +64,7 @@
 //	3*(number of k-candidates installed),  typically about
 //	6n words for files of length n.
 //
-// One of task C5f's seven (../TODO.md).  ./README.md is the account; five things are worth
+// One of task C5f's seven (../README.md).  ./README.md is the account; five things are worth
 // having at the head of the source.
 //
 // THE LINE HASH WAS A 1's-COMPLEMENT SUM IN 16-BIT HUNKS OF A 32-BIT long, and neither

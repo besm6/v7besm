@@ -1,6 +1,6 @@
 # /bin/nice -- Unix v7 nice(1), built natively for the BESM-6.
 #
-# The first of task C8's five (../TODO.md), and the only one that reads no kernel state at
+# The first of task C8's five (../README.md), and the only one that reads no kernel state at
 # all.  b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over nice.c, links
 # it `crt0.o nice.o -lc -lruntime' against the libc built in ../../lib, and stages the result
 # as build/rootfs/bin/nice.  Added from inside the top-level libruntime guard, after lib/.

@@ -60,7 +60,7 @@ v7's `stty` had no word for it and this port added none.
 That is deliberate and it is the conservative half of the same judgement. The cut is *subtractive*,
 on `getty`'s precedent: a port decides what of v7 survives, not what v7 should have had. And on a
 typewriter with no keyboard buffer to stop, flow control means about as much as the delays do.
-[../TODO.md](../TODO.md) carries it as a named loose end rather than this program inventing a name
+[../README.md](../README.md) carries it as a named loose end rather than this program inventing a name
 for it — the same treatment `TIOCEXCL` gets, which `ttioccomm()` accepts and nothing tests.
 
 ## Three bugs the cut did not cover

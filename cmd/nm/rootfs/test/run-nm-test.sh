@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two nms built from one source must print the same symbol table.  Task C9c,
-# ../../TODO.md.  Invoked by ctest as:
+# ../../README.md.  Invoked by ctest as:
 #
 #	run-nm-test.sh HOSTNM SIM PROG AS AR SRCDIR NAME FIXTURE KIND [args...]
 #

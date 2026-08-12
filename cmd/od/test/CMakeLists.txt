@@ -10,7 +10,7 @@
 #
 # `word' IS THE SYNONYM ASSERTION and it is a diff of two identical files on purpose: -w and
 # -o must produce the same bytes, because -w is a second spelling of -o and not a format of
-# its own (../TODO.md asked for `a -w word dump in 16 octal digits'; making it a separate
+# its own (../README.md asked for `a -w word dump in 16 octal digits'; making it a separate
 # format would have been the change that really redefined a v7 flag).  If somebody later gives
 # -w a format of its own, this case is what says so.
 #

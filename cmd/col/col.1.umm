@@ -18,7 +18,7 @@ col [-bfx]
 implied by reverse line feeds (ESC-7) and by forward and reverse half line feeds (ESC-9 and
 ESC-8). *Col* is particularly useful for filtering multicolumn output made with the `.rt`
 command of *nroff* and output resulting from use of the tbl(1) preprocessor. *Note:* neither
-program is on this system - see *cmd/TODO.md* - so what *col* filters here is whatever a
+program is on this system - see *cmd/README.md* - so what *col* filters here is whatever a
 program or a script produces for it.
 
 Although *col* accepts half line motions in its input, it normally does not emit them on

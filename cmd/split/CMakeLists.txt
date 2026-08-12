@@ -1,6 +1,6 @@
 # /bin/split -- Unix v7 split(1), built natively for the BESM-6.
 #
-# One of task C5a's six (../TODO.md).  b6_prog() (../../scripts/BesmCross.cmake) runs the b6*
+# One of task C5a's six (../README.md).  b6_prog() (../../scripts/BesmCross.cmake) runs the b6*
 # toolchain over split.c, links it `crt0.o split.o -lc -lruntime' against the libc built in
 # ../../lib, and stages the result as build/rootfs/bin/split.
 #

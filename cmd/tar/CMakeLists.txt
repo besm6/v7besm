@@ -1,4 +1,4 @@
-# tar(1) -- archive files.  Task C7 (../TODO.md), and the whole of it.
+# tar(1) -- archive files.  Task C7 (../README.md), and the whole of it.
 #
 # b6_prog() cross-compiles tar.c with the b6* toolchain, links it against the libc built in
 # ../../lib, stages it into build/rootfs/bin/tar for ../../root.manifest to pick up, and

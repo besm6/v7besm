@@ -4,7 +4,7 @@
 // Neither v7's nor C11's: POSIX has had it since 1988 and C only since C23, and
 // v7 wrote it out by hand wherever it was wanted.  This tree did the same --
 // cmd/quot/quot.c carries its own three lines of it -- until cmd/cc asked for it
-// nine times over in one program (task C9e, cmd/TODO.md), which is the point at
+// nine times over in one program (task C9e, cmd/README.md), which is the point at
 // which a routine belongs in the library rather than in each caller.
 //
 // Declared in <string.h>, where POSIX puts it, rather than in <stdlib.h> beside

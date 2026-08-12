@@ -42,7 +42,7 @@ struct ksym {
 };
 
 // The exported set.  The comment column is re-checked whenever a program arrives, and has
-// twice been wrong (cmd/TODO.md task C8): "who reads this" must have an answer.
+// twice been wrong (cmd/README.md task C8): "who reads this" must have an answer.
 //
 // WHAT IS DELIBERATELY ABSENT, since an empty answer looks like an unasked question:
 //

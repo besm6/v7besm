@@ -2,7 +2,7 @@
 # Two things live here.
 #
 # /usr/bin/lex and /usr/lib/lex/ncform -- cmd/lex built a SECOND time, natively
-# for the BESM-6 (task C10d, ../../TODO.md).  The sources are the host tool's
+# for the BESM-6 (task C10d, ../../README.md).  The sources are the host tool's
 # own; the only thing that differs is the size profile in ../ldefs.h keyed on
 # `besm6'.  ../README.md, "Building for the BESM-6".
 #

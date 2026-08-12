@@ -46,7 +46,7 @@ add_custom_target(fsck_fsimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fsckimg.img)
 # The `clean' case runs against DF's fixture rather than this one, which makes the pair a
 # cross-check instead of a duplication: two independently built filesystems that must both
 # come out clean, and a free count fsck reaches by walking the list that must equal the
-# 555 cmd_df_image asserts df prints.  ../../TODO.md asked C4d to reuse df's image; this is
+# 555 cmd_df_image asserts df prints.  ../../README.md asked C4d to reuse df's image; this is
 # the half of it that is reusable, and fsckimg.manifest says why the rest is not.
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dfimg.img
     COMMAND ${CMAKE_COMMAND} -E copy

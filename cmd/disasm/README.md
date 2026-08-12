@@ -40,7 +40,7 @@ time into [`scripts/vscode-besm6/`](../../scripts/vscode-besm6), whose grammar h
 
 These same sources — plus the `cmd/libaout` files `disasm` calls — are built a **second** time,
 by the `b6*` cross toolchain, into `build/rootfs/usr/bin/disasm`: task **C9c** in
-[../TODO.md](../TODO.md), with [`../nm`](../nm), [`../size`](../size) and
+[../README.md](../README.md), with [`../nm`](../nm), [`../size`](../size) and
 [`../strip`](../strip). [`rootfs/CMakeLists.txt`](rootfs) is the whole of the build machinery,
 and there is **no second copy of any source**.
 

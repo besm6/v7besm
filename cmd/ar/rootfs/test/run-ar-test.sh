@@ -1,6 +1,6 @@
 #!/bin/sh
 # Two ars built from one source must build the same archive, byte for byte.
-# Task C9d, ../../TODO.md.  Invoked by ctest as:
+# Task C9d, ../../README.md.  Invoked by ctest as:
 #
 #	run-ar-test.sh HOSTAR SIM PROG AS LIBCDIR SRCDIR NAME KIND
 #

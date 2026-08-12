@@ -1,13 +1,13 @@
 # `pstat` grew three modes because the kernel was already answering
 
-Task C8's fifth ([../TODO.md](../TODO.md)), and the widest reader of the kernel-variable table:
+Task C8's fifth ([../README.md](../README.md)), and the widest reader of the kernel-variable table:
 eleven of `kernel/kctl.c`'s thirty-three rows name this program. Two things about the port are
 structural and neither is in the brief. [pstat.c](pstat.c)'s header is the short form;
 [pstat.1m.umm](pstat.1m.umm) carries the user-facing divergences, each marked `Note:`.
 
 ## 1. It is not root-only, and the brief said it was
 
-[../TODO.md](../TODO.md) puts `ps` and `pstat` together as the pair that "run as root and only
+[../README.md](../README.md) puts `ps` and `pstat` together as the pair that "run as root and only
 root, exactly as v7's did". That is right about `ps`, whose u-area has to come off a memory
 device, and it is **wrong about this one**. Every table `pstat` prints — `inode`, `file`,
 `text`, `proc`, `mount`, `sc`, `coremap`, `swapmap`, `nswap`, `swplo`, `swapdev` — comes

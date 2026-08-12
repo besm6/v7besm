@@ -58,7 +58,7 @@ The assembler keywords are *b6as*'s directives (**.globl**, **.const**, **.text*
 **.bss**, **.comm**, **.half**, **.word**, **.equ**, **.ascii**, **.strng**, **.org**) and its
 Madlen mnemonics (**atx**, **xta**, **uj**, **vtm**, **vjm**), where v7's were PDP-11
 pseudo-ops and PDP-11 instructions. **.even** is gone, a word machine having nothing to align
-to, and so is **troff output**: there is no *troff* in this source tree - see *cmd/TODO.md*.
+to, and so is **troff output**: there is no *troff* in this source tree - see *cmd/README.md*.
 
 ## SEE ALSO
 

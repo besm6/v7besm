@@ -133,7 +133,7 @@ Stated at length in [`mv.c`](mv.c)'s header comment; in brief, and worst first.
 
 No `long`, no `%D`, and **no directory read at all.**
 
-That last one is worth stating plainly, because [`../TODO.md`](../TODO.md) task C24 listed `mv`
+That last one is worth stating plainly, because [`../README.md`](../README.md) task C24 listed `mv`
 among the eight programs whose hand-rolled directory readers were to go over `opendir(3)`, and
 it was wrong to. There is no `struct direct` in `mv.c`, no `open()` of a directory and no
 `read()`. What made it look like one was the `#include <sys/dir.h>` — carried for a single use
@@ -161,4 +161,4 @@ Two things that look like bugs and are not, both left alone with a comment:
 SYNOPSIS it was missing from, a new section for what that form costs, a DIAGNOSTICS section
 the page never had, and `Note:` paragraphs on the setuid bit and on the `/bin/cp` path that
 cannot be reached. It goes on the image as `/usr/man/man1/mv.1`, where manview(1)
-([`../TODO.md`](../TODO.md) C25a) formats it — and it is legible as it stands either way.
+([`../README.md`](../README.md) C25a) formats it — and it is legible as it stands either way.

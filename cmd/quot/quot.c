@@ -92,7 +92,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// What this file assumes of the layout, asserted rather than re-derived (../TODO.md, task
+// What this file assumes of the layout, asserted rather than re-derived (../README.md, task
 // C4).  sys/ino.h carries the rest -- that a dinode is sixteen words and that INOPB of them
 // tile a block -- which is exactly what lets the block buffer BE the i-node table.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");

@@ -24,4 +24,13 @@
 #define BRKINCR BRKPAGE
 #define BRKMAX  (4 * BRKPAGE)
 
+//
+// How much of the MACHINE stack the recursion may use, in char-units, measured from
+// `stackfloor' -- the ceiling deepchk() (error.c) enforces, since nothing else on this
+// system checks the stack at all.  Worst case rather than exact: 4,096 words of stack,
+// less NCARGS/NBPW = 854 for the argv/envp block below the floor, less ~400 for error()
+// to report it.  README.md, "The stack", says why it cannot be computed exactly.
+//
+#define STAKROOM (2800 * NBPW)
+
 #endif // SH_BRKINCR_H

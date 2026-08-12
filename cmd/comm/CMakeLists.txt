@@ -1,6 +1,6 @@
 # /bin/comm -- Unix v7 comm(1), built natively for the BESM-6.
 #
-# One of task C5b's seven (../TODO.md).  comm.c's header is the account: the three leading-tab
+# One of task C5b's seven (../README.md).  comm.c's header is the account: the three leading-tab
 # strings v7 shortened by writing into string literals, which land in the CONST segment on
 # this machine, and the collating order that stopped being v7's without a line changing --
 # `char' is unsigned here, so a byte above 0177 sorts after ASCII and not before it.

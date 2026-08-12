@@ -1,6 +1,6 @@
 # /etc/wall -- Unix v7 wall(1M), built natively for the BESM-6.
 #
-# Task C6 (../TODO.md).  It reads /etc/utmp and forks one child per live terminal, a second
+# Task C6 (../README.md).  It reads /etc/utmp and forks one child per live terminal, a second
 # apart, each writing the same message.
 #
 # THE DESTINATION IS etc/wall.  v7's section is 1M and its Makefile installs it in /etc,
