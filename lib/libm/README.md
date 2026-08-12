@@ -16,10 +16,13 @@ no v7 ancestor and each says so at its head.
 `trunc.o` is six words. One function family per file, so `b6ranlib`'s index lets a program that
 calls `sqrt` pay for `sqrt`.
 
-**Its only caller today is its own test.** [`../libtermcap/README.md`](../libtermcap/README.md)
-could name libcurses as its first consumer; this library has none yet — no `cmd/` program links
-`-lm`, and inside `lib/` only [`../test/matht.c`](../test/matht.c) and
-[`../test/headers.c`](../test/headers.c) include `<math.h>` for anything defined here.
+**Two programs on the image link it, and they take opposite amounts.**
+[`../../cmd/awk`](../../cmd/awk/) was the first (task C17): `log`, `exp` and `sqrt` are awk
+built-ins and `fmod` and `trunc` carry `%` and `int()`. [`../../cmd/units`](../../cmd/units/) is
+the second (C18) and wants **`fabs` alone**, for the range gates below — three lines of it, and
+`b6ranlib`'s index means that is all it pays for. Inside `lib/`, only
+[`../test/matht.c`](../test/matht.c) and [`../test/headers.c`](../test/headers.c) include
+`<math.h>` for anything defined here.
 
 ## Building and linking
 

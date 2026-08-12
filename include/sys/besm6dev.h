@@ -92,6 +92,12 @@
 // The faulting VIRTUAL PAGE rides in bits 5-9, but only for a data violation: an
 // instruction-protection fault reports no page (the handler has the saved PC instead).
 // See doc/Memory_Mapping.md, "Protection violations and how they are reported".
+//
+// The two arithmetic causes OVERLAP: GRP_OVERFLOW is a subset of GRP_DIVZERO, so a decode
+// must test the whole mask and test divide-by-zero first.  Underflow raises nothing -- it is
+// a silent machine zero.  See kernel/README.md, "The arithmetic faults".
+#define GRP_DIVZERO    034000000 // 23-21: floating divide by zero, or a denormal divisor
+#define GRP_OVERFLOW   014000000 // 22-21: floating overflow.  A SUBSET of GRP_DIVZERO
 #define GRP_OPRND_PROT 02000000 // 20: data access to a closed page ("число в чужом листе")
 #define GRP_INSN_CHECK 0040000  // 15: word not tagged as an instruction; also a jump to 0
 #define GRP_INSN_PROT  0020000  // 14: instruction fetch from a zero-descriptor page
@@ -99,6 +105,7 @@
 #define GRP_BREAKPOINT 0004000  // 12: address-break match (М034/М035); nothing arms them
 #define GRP_PAGE_MASK  0000760  // 9-5: the faulting virtual page; recover it with >> 4
 #define GRP_PAGE_SHIFT 4
+#define GRP_RAM_CHECK  0000010  // 4: set beside either arithmetic cause; not decoded
 
 // Bits of ПРП, the peripheral interrupt register (24 bits, masked by МПРП).
 //

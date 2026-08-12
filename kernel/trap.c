@@ -17,14 +17,17 @@
 // none; trap() reads ГРП live -- the fault bits are not framed (reg.h) -- and dispatches on
 // the bit directly.  v7 folds its vector numbers into a T_* enumeration first, because there
 // the hardware hands over a number that means nothing to the kernel.  Here it hands over the
-// cause itself, and an enumeration in between would name the same five things twice.
+// cause itself, and an enumeration in between would name the same seven things twice.
 //
 // There is no trap kind for a system call, either: an extracode is not reachable through 0500
 // at all.  The hardware vectors э50-э77 straight to 0550-0577, so the syscall gate is its own
 // door (besm6.S: `sysgate'/`badext') and its C side is kernel/syscall.c.
 
-// Every ГРП bit that vectors through 0500 -- the five trap() decodes.
-#define GRP_FAULTS (GRP_OPRND_PROT | GRP_INSN_PROT | GRP_ILL_INSN | GRP_INSN_CHECK | GRP_BREAKPOINT)
+// Every ГРП bit that vectors through 0500 -- the seven trap() decodes, plus the check bit the
+// machine sets beside an arithmetic one.
+#define GRP_FAULTS                                                                            \
+    (GRP_DIVZERO | GRP_OVERFLOW | GRP_RAM_CHECK | GRP_OPRND_PROT | GRP_INSN_PROT |            \
+     GRP_ILL_INSN | GRP_INSN_CHECK | GRP_BREAKPOINT)
 
 // Word indices of the user's saved registers in the trap frame (reg.h).
 // regloc[0..14] are the general registers zeroed on exec (ACC..r14);
@@ -111,7 +114,7 @@ void trap(void)
     u.u_ar0 = (int *)tr;
 
     // vmstat -p's `tr', counted before the restart fix-up and before the decode, so that
-    // every one of the five ГРП causes is counted whatever happens next.  grow()'s retry
+    // every one of the seven ГРП causes is counted whatever happens next.  grow()'s retry
     // is deliberately included: an automatic stack extension is the one fault this kernel
     // takes ON PURPOSE and it is normally the commonest, so excluding it would hide the
     // very traffic the column exists to show.
@@ -126,9 +129,10 @@ void trap(void)
     //
     // Only the word needs correcting: SPSW_RIGHT_INSTR already says WHICH HALF of it
     // faulted, and `выпр' reloads the half-word indicator from it -- verified on the
-    // machine from both halves (kernel/test/utrap).  Faults that do not advance the PC
-    // (an illegal instruction, an instruction check) leave SPSW_NEXT_RK clear, and the
-    // guard makes this a no-op for them.
+    // machine from both halves (kernel/test/utrap).  SPSW_NEXT_RK is clear for the other
+    // four causes -- an illegal instruction and an instruction check do not advance the PC,
+    // and the two arithmetic ones advance it without flagging that they did -- so the guard
+    // makes this a no-op there.
     if (tr->spsw & SPSW_NEXT_RK) {
         tr->ret--;
         tr->spsw &= ~SPSW_NEXT_RK;
@@ -172,6 +176,17 @@ void trap(void)
         // Nothing arms М034/М035: ptrace's single-step request is refused (sig.c), and no
         // other caller sets them.  The arm stays so that a match cannot reach the panic
         // below; there is no flag to clear, the ГРП bit above being the whole state.
+
+    } else if ((grp & GRP_DIVZERO) == GRP_DIVZERO) { // floating divide by zero
+        // Whole mask, divzero before overflow: the bits overlap (sys/besm6dev.h).  And NO PC
+        // FIX-UP for either -- the machine leaves SPSW_NEXT_RK clear here, having already
+        // advanced past the faulting instruction, so a returning handler resumes after it.
+        __besm6_mod(MOD_GRPCLR, ~(GRP_DIVZERO | GRP_RAM_CHECK));
+        i = SIGFPE;
+
+    } else if ((grp & GRP_OVERFLOW) == GRP_OVERFLOW) { // floating overflow
+        __besm6_mod(MOD_GRPCLR, ~(GRP_OVERFLOW | GRP_RAM_CHECK));
+        i = SIGFPE;
 
     } else {
         // Vectored with nothing pending: a cause we do not decode.

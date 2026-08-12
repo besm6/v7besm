@@ -9,7 +9,7 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
   `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
 - **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
-  plus **103 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
+  plus **104 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
   is `b6_prog()` calls under `cmd/` whose `DEST` is not `test/…`, and nothing but that rule.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
@@ -59,11 +59,11 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 228 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 214 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
 `/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14,
 `/bin/m4` 19, `/bin/make` 24, `/bin/dc` 32, `/bin/bc` 20 with one more for
-`/usr/lib/lib.b`, and `/bin/awk` 42.
+`/usr/lib/lib.b`, `/bin/units` 14 with three for `/usr/lib/units`, and `/bin/awk` 42.
 
 **Twelve programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc`, `yacc`, `lex` — as the host `b6*` tools and, from the same sources under
@@ -88,7 +88,10 @@ relational lowers to an out-of-line call** (`b$ge`, `b$lt`, …), even `x >= 0` 
 Traps: **`b6lower` ignores designated initializers**, initializing positionally and silently;
 a **string literal cannot initialize a `char *` inside a struct initializer**; there is **no
 `int64_t`** (an `int` is 41 bits, an `unsigned` exactly 48, so only what holds a whole word
-becomes `uword_t`); **no `posix_spawn()` and no `waitpid()`**, `<sys/wait.h>` having the
+becomes `uword_t`); a **`double` is one word** (5.42e-20 … 9.22e+18, twelve digits) and a
+**floating overflow is a machine FAULT** that `kernel/trap.c` turns into `SIGFPE`, so a range
+test goes *before* the operation — underflow raises nothing and silently becomes zero;
+**no `posix_spawn()` and no `waitpid()`**, `<sys/wait.h>` having the
 argument-less `wait(2)` only; and `mkstemp()`/`mkstemps()` are **not atomic**, this kernel
 having no `O_CREAT` and no `O_EXCL`.
 

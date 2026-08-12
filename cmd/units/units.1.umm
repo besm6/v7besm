@@ -8,9 +8,7 @@ units - conversion program
 
 ## SYNOPSIS
 
-```c
-units
-```
+| **units** [ **-** ] [ file ]
 
 ## DESCRIPTION
 
@@ -19,8 +17,8 @@ scales. It works interactively in this fashion:
 
 | *You have:* inch
 | *You want:* cm
-| *\* 2.54000e+00*
-| */ 3.93701e-01*
+| *\* 2.540000e+00*
+| */ 3.937008e-01*
 
 A quantity is specified as a multiplicative combination of units optionally preceded by a
 numeric multiplier. Powers are indicated by suffixed positive integers, division by the usual
@@ -28,8 +26,12 @@ sign:
 
 | *You have:* 15 pounds force/in2
 | *You want:* atm
-| *\* 1.02069e+00*
-| */ 9.79730e-01*
+| *\* 1.020689e+00*
+| */ 9.797299e-01*
+
+Note: both arguments are v7's and neither was documented. *File* names a table to read instead
+of `/usr/lib/units`, and **-** dumps every definition in it after loading. The prompts are
+lower case here, as they always were in the program.
 
 *Units* only does multiplicative scale changes. Thus it can convert Kelvin to Rankine, but not
 Centigrade to Fahrenheit. Most familiar units, abbreviations, and metric prefixes are
@@ -40,9 +42,8 @@ including:
         pi      ratio of circumference to diameter
         c       speed of light
         e       charge on an electron
-        g       acceleration of gravity 
+        g       acceleration of gravity
         force   same as g
-        mole    Avogadro's number
         water   pressure head per unit height of water
         au      astronomical unit
 ```
@@ -52,6 +53,24 @@ that differ from their US counterparts are prefixed thus: `brgallon`. Currency i
 `belgiumfranc`, `britainpound`, ...
 
 For a complete list of units, `cat /usr/lib/units`.
+
+## THE RANGE OF A NUMBER HERE
+
+A BESM-6 floating word holds **5.42e-20** to **9.22e+18** with twelve significant digits, so
+`%e` output carries six digits after the point and no more than twelve are ever meaningful.
+
+Note: **six of v7's definitions do not fit and are commented out of the table** --
+`mole`, `atomicmassunit`, `amu`, `barn`, `dalton` and `k`. Asking for one of them reports
+`cannot recognize`. Avogadro's number is the reason `mole` is gone; nothing else in the table
+refers to any of the six, so the remaining 421 are v7's unchanged.
+
+A quantity that leaves the range while being converted reports `underflow or overflow` and the
+dialogue continues. In v7 that message came from a SIGFPE handler; here every product and
+quotient is range-checked before it is performed, because on this machine an overflow is a
+machine fault and not a signal.
+
+A table named on the command line may hold a definition that does not fit. It is reported as
+`out of range` *name* when the table is read, and that name is then unknown.
 
 ## FILES
 

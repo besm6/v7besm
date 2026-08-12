@@ -44,8 +44,14 @@ std::string lower(std::string s)
     return s;
 }
 
-// The conventional section vocabulary.  Outside it is a warning, never an error --
-// this port's prose headings (## HOW MANY FILES, ## BUFFERING) are deliberate.
+// The conventional section vocabulary.  A heading OUTSIDE it is not diagnosed at all: the
+// format says a page may invent a prose heading for something deserving its own place and that
+// the freedom is deliberate (doc/Manual_Page_Format.md SS6), and about fifty pages here use it
+// -- ## BUFFERING, ## HOW MANY FILES, ## BLOCKS ARE 1024 BYTES.  What IS worth a word is a
+// heading that MEANS one of these and is spelled differently, since a reader and an index both
+// go by the exact string: `See Also', `SEE-ALSO', `EXIT-STATUS'.  So the list below is matched
+// twice -- exactly, and again through section_key() with the case and the punctuation taken
+// out -- and only the second, near-miss match warns.
 const std::set<std::string> &known_sections()
 {
     static const std::set<std::string> s = {
@@ -54,6 +60,28 @@ const std::set<std::string> &known_sections()
         "EXAMPLES",    "LIMITS",   "ENVIRONMENT", "EXIT STATUS",
     };
     return s;
+}
+
+// A heading reduced to what it MEANS: letters and digits only, upper case.  `See Also',
+// `SEE-ALSO' and `SEE ALSO' all reduce to SEEALSO.
+std::string section_key(const std::string &s)
+{
+    std::string k;
+    for (unsigned char c : s)
+        if (isalnum(c))
+            k += (char)toupper(c);
+    return k;
+}
+
+// The canonical spelling a heading is a near-miss of, or "" if it is not one at all.
+std::string canonical_section(const std::string &h)
+{
+    const std::set<std::string> &v = known_sections();
+    std::string k                  = section_key(h);
+    auto it = std::find_if(v.begin(), v.end(),
+                           [&k](const std::string &s) { return section_key(s) == k; });
+
+    return it == v.end() ? std::string() : *it;
 }
 
 void walk(const std::vector<Block> &blocks, const std::string &path, Diag &diag, bool &tabs,
@@ -117,8 +145,12 @@ bool lint(const Doc &doc, const std::string &path, Diag &diag)
                 first = &b;
             if (h == "DESCRIPTION")
                 have_desc = true;
-            if (!known_sections().count(h))
-                diag.warn(path, 0, "unconventional section heading: " + h);
+            if (!known_sections().count(h)) {
+                std::string want = canonical_section(h);
+
+                if (!want.empty())
+                    diag.warn(path, 0, "section heading " + h + " should be spelled " + want);
+            }
             last_level = 2;
         } else if (b.kind == Kind::Subsection) {
             if (last_level < 2)

@@ -430,6 +430,8 @@ case STOP_OPERAND_PROT:
 | **14** | `GRP_INSN_PROT` | Instruction fetch from a page with a zero descriptor (*"Команда в чужом листе"*) |
 | **13** | `GRP_ILL_INSN` | Privileged instruction in user mode |
 | **15** | `GRP_INSN_CHECK` | Fetched word is not tagged as an instruction; also a jump to address 0 |
+| **23–21** | `GRP_DIVZERO` | Floating divide by zero, or a denormal divisor |
+| **22–21** | `GRP_OVERFLOW` | Floating overflow — **a subset of `GRP_DIVZERO`'s bits** |
 | **5–9** | `GRP_PAGE_MASK` | **The faulting virtual page number** |
 
 — [besm6_defs.h:453](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L453)
@@ -465,6 +467,16 @@ So a handler that intends to retry must reconstruct the faulting instruction's p
 `SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR` and rewrite `M[IRET]`/`SPSW` before returning. Get this wrong
 and a demand-paged program will skip an instruction every time it faults — which is exactly the kind
 of bug that only shows up under memory pressure.
+
+**The two arithmetic causes are the exception, and are the reason the fixup is guarded rather than
+unconditional.** `STOP_OVFL` and `STOP_DIVZERO` also vector with the PC advanced, but their arms
+never set `SPSW_NEXT_RK` — the machine advanced because the instruction *completed* (with the
+wrapped result in the accumulator), not because it took delivery of the next one. That is the
+behaviour a handler wants: resuming after the fault is progress, and retrying it would fault
+forever. `kernel/trap.c` needs no code for this; its `if (tr->spsw & SPSW_NEXT_RK)` is simply
+false, and `kernel/test/ufpe` is the assertion that it stays that way. Their halt condition also
+differs: they are gated on БРО (`RUU_AVOST_DISABLE`) rather than on ПоП/ПоК, and reset leaves БРО
+set, so they always vector.
 
 **The fixup, concretely.** Work the two saves through `sim_instr`'s pre-advance — `PC`/`RUU` are
 stepped *before* the instruction executes ([besm6_cpu.c:1080](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1080)) — and the `++PC`/`^=` above collapses to

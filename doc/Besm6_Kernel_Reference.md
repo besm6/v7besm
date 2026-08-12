@@ -174,7 +174,7 @@ that bracket holds БлПр. Note that **`vtm N,0` writes БлПр along with Б
 `vtm 2`/`vtm 3` *enables* interrupts as a side effect, and a bracket that wants them off says
 `02002`/`02003` and restores PSW afterwards.
 
-### Five hardware rules everything obeys
+### Six hardware rules everything obeys
 
 1. **РП/РЗ cannot be read back.** The map is a shadow table in memory: `u.u_upt[8]`, eight words,
    each carrying four РП descriptors *and* (in bits 21–28 of the even words) the matching РЗ byte —
@@ -199,7 +199,15 @@ that bracket holds БлПр. Note that **`vtm N,0` writes БлПр along with Б
    stale translation is not a state the machine can be in. v7's `invd()` is deleted, not stubbed.
 5. **A fault reports the faulting *page* (ГРП bits 5–9), and the saved PC points *past* the
    faulting instruction.** Anything that means to retry — stack growth — must back the PC up using
-   `SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR`.
+   `SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR`. The two **arithmetic** causes are the exception and prove
+   the rule: they advance the PC without setting `SPSW_NEXT_RK`, because the instruction completed
+   rather than being prefetched past, so the guarded fix-up correctly does nothing and a returning
+   handler makes progress. `kernel/test/ufpe`.
+6. **A floating overflow or divide by zero is a FAULT, not a flag** — `SIGFPE`, ГРП 22–21 and 23–21
+   (the second a superset of the first, so decode it first). **Underflow raises nothing** and
+   becomes machine zero. There are no IEEE sticky flags and no trap a program can arm
+   (`<fenv.h>`), so anything computing with `double` range-checks *before* the operation; a check
+   afterwards has nothing left to check.
 
 ### The u-area invariant
 
@@ -268,6 +276,15 @@ virtual page 0.
 
 What the existing tests cost to get right:
 
+* **A forge test can link the real file under test**, and should where the decode itself is the
+  subject: `usys` takes `syscall.c`, `usig` takes `sendsig.c`, and `ufpe` takes `trap.c` with
+  stubs for the eight things it calls (`psignal`, `grow`, `panic`, `printf`, …), so a wrong arm
+  fails the test instead of being read for. The one thing that has to be built for it is **`u`**:
+  `u_stack` is the *last* member of `struct user` and the trap frame plus the C frames grow up out
+  of the object, so a test that links a file reading `u.u_stack` must **reserve `u` in assembly**
+  with a page of slack above it — a C `struct user u;` would have the frame overwrite the next bss
+  object — and point the crt0's `ustkbase` cell at `u.u_stack` from `main()`, only C knowing that
+  offset.
 * **A round trip proves nothing about addressing** — a driver that put the data in the wrong place
   passes, having been consistently wrong twice. Leave *two different* patterns and read the region
   back whole. Likewise a forged map's adjacent virtual pages may be physically adjacent too, so

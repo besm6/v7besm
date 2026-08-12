@@ -98,6 +98,7 @@ b6_test(mmutest  crt0 mmutest mmuhelp utab brz uarea seg usermem)
 b6_test(umem     crt0 umem mmuhelp utab brz usermem ucopy)
 b6_test(uintr    crt0u uintr utab brz)
 b6_test(utrap    crt0t utrap utab brz)
+b6_test(ufpe     crt0f ufpe trap utab brz)   # the only one that links the real trap.c
 b6_test(usys     crt0s usys syscall utab brz usermem)
 b6_test(usig     crt0sg usig syscall sendsig utab brz usermem)
 b6_test(uclock   crt0c uclock clock intr utab brz)
@@ -254,6 +255,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/usr/lib/diffh
     ${B6_ROOTFS}/usr/lib/lib.b
+    ${B6_ROOTFS}/usr/lib/units
     ${B6_ROOTFS}/usr/lib/yaccpar
     ${B6_ROOTFS}/usr/lib/lex/ncform
     ${B6_ROOTFS}/usr/bin/cpp
@@ -322,6 +324,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/tsort
     ${B6_ROOTFS}/bin/tty
     ${B6_ROOTFS}/bin/uniq
+    ${B6_ROOTFS}/bin/units
     ${B6_ROOTFS}/bin/vmstat
     ${B6_ROOTFS}/bin/wc
     ${B6_ROOTFS}/bin/who

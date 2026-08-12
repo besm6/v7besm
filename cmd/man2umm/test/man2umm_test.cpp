@@ -764,14 +764,38 @@ TEST(Lint, Rule9MarkedUpCrossReference)
               0);
 }
 
-TEST(Lint, UnconventionalHeadingIsOnlyAWarning)
+// An invented prose heading is the format's own freedom (Manual_Page_Format.md SS6) and is not
+// diagnosed at all -- about fifty pages in this tree take it.
+TEST(Lint, InventedHeadingIsNotDiagnosed)
 {
     std::istringstream in("# FOO(1)\n\n## NAME\n\nfoo - a thing\n\n## DESCRIPTION\n\nx\n\n"
                           "## HOW MANY FILES\n\nNineteen.\n");
     Diag d;
     Doc doc = read_umm(in, "t/foo.1.umm", d);
     EXPECT_TRUE(lint(doc, "t/foo.1.umm", d));
-    EXPECT_GT(d.warnings(), 0);
+    EXPECT_EQ(d.warnings(), 0);
+}
+
+// A heading that MEANS a conventional one but is spelled otherwise is a warning, since a reader
+// and an index both go by the exact string.
+TEST(Lint, MisspeltConventionalHeadingIsAWarning)
+{
+    std::istringstream in("# FOO(1)\n\n## NAME\n\nfoo - a thing\n\n## DESCRIPTION\n\nx\n\n"
+                          "## See Also\n\nbar(1)\n");
+    Diag d;
+    Doc doc = read_umm(in, "t/foo.1.umm", d);
+    EXPECT_TRUE(lint(doc, "t/foo.1.umm", d));
+    EXPECT_EQ(d.warnings(), 1);
+}
+
+TEST(Lint, PunctuatedConventionalHeadingIsAWarning)
+{
+    std::istringstream in("# FOO(1)\n\n## NAME\n\nfoo - a thing\n\n## DESCRIPTION\n\nx\n\n"
+                          "## EXIT-STATUS\n\n0\n");
+    Diag d;
+    Doc doc = read_umm(in, "t/foo.1.umm", d);
+    EXPECT_TRUE(lint(doc, "t/foo.1.umm", d));
+    EXPECT_EQ(d.warnings(), 1);
 }
 
 // ------------------------------------------------------------------ the CLI ----

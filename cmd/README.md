@@ -133,6 +133,17 @@ plain filters hold `int` indices already.
   source for `%D` and `%O`; it costs a second, and it is still finding them — `expr`'s was the
   whole output of `expr a + b`.
 
+**And a `double` is one word too**, with no IEEE anything behind it: `5.42e-20` to `9.22e+18`,
+twelve digits, `sizeof(double) == sizeof(float) == 6`. Two consequences bind every port that
+computes with real numbers. **An overflow is a machine FAULT, not a signal** — it vectors through
+0500 and `kernel/trap.c` turns it into `SIGFPE`, which kills the process — so a range test goes
+*before* the operation and never after it; underflow is the opposite and raises nothing at all,
+quietly becoming zero. And **an intermediate may leave the range where the answer does not**:
+`units`' own table has `1.6021917-19`, a representable number whose v7 scaling built `1e26` first
+([units/README.md](units/README.md), [../lib/libm/README.md](../lib/libm/README.md)).
+`printf` carries `%e`/`%f`/`%g` and clamps to twelve significant digits; `strtod` is declared and
+not implemented, so use `atof`.
+
 The other direction: **plain `char` is unsigned here**
 ([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)), so the
 `(unsigned char)` a `<ctype.h>` call wants is habit rather than necessity — and a `signed`→
@@ -246,10 +257,11 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **228 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **214 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
 what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32, `bc` 20 with one more
-block for the `/usr/lib/lib.b` its `-l` reads, and `awk` **42**, one of them its enlarged
+block for the `/usr/lib/lib.b` its `-l` reads, `units` 14 with three of them the
+`/usr/lib/units` table it cannot run without, and `awk` **42**, one of them its enlarged
 manual page — the largest single addition yet, and a reminder that the number is worth reading
 before a port rather than after. `awk` is also the one whose *own* ceiling was never this
 number: what is left below the stack after its image is the whole of its heap

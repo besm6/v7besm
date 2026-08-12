@@ -419,8 +419,11 @@ the right place to check it.
    parentheses — is invisible to a checker that only suppresses uniformly marked matches.
 10. The file ends with exactly one newline, and every heading has a blank line above and below.
 
-Worth checking as warnings: a `##` outside §6's vocabulary, and a `## NAME` list omitting the
-page's own name. Two more that tooling usually cannot: a line past 100 columns outside a fenced
+Worth checking as warnings: a `##` that *means* one of §6's sections but is spelled some other
+way — `See Also`, `SEE-ALSO` — since a reader and an index both go by the exact string; and a
+`## NAME` list omitting the page's own name. An invented prose heading is **not** one of them:
+§6 grants that freedom deliberately and about fifty pages here take it, so warning on every
+heading outside the vocabulary buries the near-misses it is worth catching. Two more that tooling usually cannot: a line past 100 columns outside a fenced
 or line block, and a `## SEE ALSO` that is not a plain comma-separated reference list.
 
 ---

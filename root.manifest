@@ -848,6 +848,18 @@ file /bin/uniq          # cmd/uniq -- task C5b.  Compares whole bytes and masks 
 source ../../rootfs/bin/uniq
 mode 0755
 
+file /bin/units         # cmd/units -- task C18, the first program here whose whole subject is
+                        # floating point, reading the /usr/lib/units table below.  A BESM-6
+                        # float is one word: 5.42e-20 to 9.22e+18, twelve digits, and an
+                        # OVERFLOW IS A FAULT rather than the signal v7 caught -- so every
+                        # product and quotient is range-gated before the fact and the six
+                        # definitions that do not fit are commented out of the table.  It
+                        # installs a SIGFPE handler all the same, and is the only program on
+                        # this image that does: the kernel raises that signal now
+                        # (kernel/trap.c), and the gates should mean it never arrives.
+source ../../rootfs/bin/units
+mode 0755
+
 file /bin/vmstat        # cmd/vmstat -- not a v7 program: 2.11BSD's, and the reader a dozen
                         # of kernel/kctl.c's rows were being kept for.  IN /bin, AS 2.11BSD
                         # HAD IT, and for dmesg's reason above rather than the section: it
@@ -1557,9 +1569,9 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  TEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# is worth less than the blocks.  NINE OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
 # THIS IMAGE -- ac, at, calendar, cron, crypt, mail, makekey,
-# sa, units and update.  Seven are ports cmd/TODO.md still has open and their pages are
+# sa and update.  Six are ports cmd/TODO.md still has open and their pages are
 # already correct when one lands; mail, ac and sa are in that file's "Not ported, and why"
 # table and will never have a program, which is v7's own habit -- a manual page is where a
 # decision about a program is recorded whether or not the program exists.
@@ -2403,6 +2415,18 @@ file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see
                         # bounded by the input -- which is the whole reason -h exists.
 source ../../rootfs/usr/lib/diffh
 mode 0755
+
+file /usr/lib/units     # cmd/units's conversion table -- task C18, and the FOURTH entry in
+                        # /usr/lib that is not a program: data read by /bin/units above, hence
+                        # 0644.  v7's file unchanged but for SIX DEFINITIONS COMMENTED OUT --
+                        # mole, atomicmassunit, amu, barn, dalton and k -- whose values fall
+                        # outside a BESM-6 floating word (5.42e-20 .. 9.22e+18).  Nothing else
+                        # in the file refers to any of them, so 421 of v7's 427 definitions
+                        # survive and the six read as `cannot recognize'.  Commented rather
+                        # than deleted so the file still says what this machine cost.
+                        # Same bytes as cmd/units/units.
+source ../../rootfs/usr/lib/units
+mode 0644
 
 file /usr/lib/lib.b     # cmd/bc's math library -- task C16, and the THIRD entry in /usr/lib
                         # that is not a program: a bc program, read by /bin/bc when -l is

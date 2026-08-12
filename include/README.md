@@ -106,6 +106,9 @@ for a number that already had one, v7's kernel spellings `SIGINS`, `SIGTRC`, `SI
 `SIGSEG`, `SIGCLK` and `SIGTRM` beside the standard `SIGILL`, `SIGTRAP`, `SIGFPE`, `SIGKILL`,
 `SIGSEGV`, `SIGALRM` and `SIGTERM`. Those seven are **gone rather than aliased**: the kernel now
 names a signal by the same spelling the user does, so no signal in this tree has two names.
+`SIGFPE` is worth one line of its own, because it was inert for a long time and no longer is:
+the kernel raises it now on a floating overflow or divide by zero (`kernel/trap.c`, task C18),
+and `/bin/units` is the one program on the image that installs a handler for it.
 `<sys/signal.h>` holds `NSIG`, the fifteen numbers and `SIG_DFL`/`SIG_IGN`/`SIG_ERR` and nothing
 else — `#define`-only, like `<sys/errno.h>` — while `<signal.h>` adds `sig_atomic_t` and the
 prototypes and `<sys/user.h>` takes `NSIG` from the same file `kernel/sig.c` does. The one

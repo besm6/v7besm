@@ -1,0 +1,25 @@
+/ a small fixture table for cmd/units's own cases -- NOT a cut-down copy of ../units,
+/ which every other case names directly.  Two dimensions and a handful of definitions,
+/ so that a `-' dump is short enough to be an expectation a reader can check.
+
+/ dimensions
+
+m			*a*
+sec			*c*
+
+/ constants
+
+fuzz			1
+pi			3.14159265358979323846
+
+/ lengths
+
+cm			1|100 m
+inch			2.54 cm
+foot			12 inch
+
+/ out of range on this machine: 1e+30 overflows and 1e-30 underflows, so both are
+/ dropped with a diagnostic.  ../units has six of these commented out instead.
+
+big			1+30
+tiny			1-30

@@ -174,17 +174,40 @@ registers that the hardware overwrites the instant an interrupt is taken.
 
 **Faults.** There is no trap kind to switch on. The machine has one internal-interrupt vector and
 reports the cause as a bit in ГРП, so `trap()` ([trap.c](trap.c)) reads ГРП live and dispatches on
-the bit — an enumeration in between would name the same five things twice. Five bits arrive here:
-a data-protection violation, an instruction fetch from a closed page, a privileged instruction in
-user mode, a word that is not an instruction, and an address-break match. Each arm dismisses its
-own bit *first*, because a bit left standing could fire afterwards as a spurious external
-interrupt.
+the bit — an enumeration in between would name the same seven things twice. Seven bits arrive
+here: a data-protection violation, an instruction fetch from a closed page, a privileged
+instruction in user mode, a word that is not an instruction, an address-break match, a floating
+overflow and a floating divide by zero. Each arm dismisses its own bit *first*, because a bit
+left standing could fire afterwards as a spurious external interrupt.
 
 Before any of that, the PC is backed up. The machine takes delivery of the next word of the
 instruction stream before vectoring and saves *that* as the return address, so the framed return
 is the faulting word plus one. Only the word needs correcting: the mode word already records which
 half of it faulted, and `выпр` reloads that. Everything downstream — the stack-growth retry,
 signal delivery, `ptrace` — then sees a frame describing the instruction that actually faulted.
+
+### The arithmetic faults
+
+The last two arms are newer than the rest and differ from them in three ways worth writing down.
+
+**Their bits overlap.** Divide-by-zero is ГРП 23–21 and overflow 22–21, so `GRP_OVERFLOW` is a
+*subset* of `GRP_DIVZERO` and `grp & GRP_OVERFLOW` is true for both. The decode tests the whole
+mask, and tests divide-by-zero first. Bit 21 alone is a check interrupt this kernel does not
+decode; bit 4 rides along with either and is dismissed with them.
+
+**They need no PC fix-up, and that reads like an omission.** The machine advances the PC before
+vectoring here too, but it does *not* set `SPSW_NEXT_RK`, because it advanced by completing the
+instruction rather than by prefetching past it. The guard above is therefore false and the frame
+is left alone — which is what makes a returning handler legal: it resumes *after* the fault
+instead of re-taking it forever. The accumulator holds the wrapped result, so a handler is only
+worth having beside a range gate.
+
+**Underflow is not among them.** It raises nothing at all and quietly becomes machine zero, so
+the asymmetry the libm README describes is the kernel's as much as the library's: a program that
+wants to know must test before the operation. `/bin/units` is the one program on the image that
+installs a `SIGFPE` handler, and `kernel/test/ufpe` is the assertion — the only forge test that
+links the real `trap.c` rather than a copy of it, precisely because what is under test *is* the
+decode. Before it existed, either fault fell through to `panic("trap")` and stopped the machine.
 
 Data protection is the interesting arm, because it is where this kernel takes a fault **on
 purpose**. If the page reported is the one just above the stack, `grow()` extends the stack and

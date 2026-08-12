@@ -12,12 +12,17 @@ degC			*j*
 
 / constants
 
+/ SIX DEFINITIONS ARE COMMENTED OUT BELOW -- mole, atomicmassunit, amu,
+/ barn, dalton and k -- because their values fall outside what a BESM-6
+/ floating word holds: 5.42e-20 to 9.22e+18.  Nothing else in this file
+/ refers to any of them.  Task C18; see units.c and README.md.
+
 fuzz			1
 pi			3.14159265358979323846
 c			2.997925+8 m/sec fuzz
 g			9.80665 m/sec2
 au			1.49597871+11 m fuzz
-mole			6.022169+23 fuzz
+/mole			6.022169+23 fuzz
 e			1.6021917-19 coul fuzz
 energy			c2
 force			g
@@ -271,14 +276,14 @@ arpentlin		191.835 ft
 astronomicalunit	au
 atmosphere		1.01325+5 nt/m2
 atm			atmosphere
-atomicmassunit		1.66044-27 kg fuzz
-amu			atomicmassunit
+/atomicmassunit		1.66044-27 kg fuzz
+/amu			atomicmassunit
 bag			94 lb
 bakersdozen		13
 bar			1+5 nt/m2
 barie			1-1 nt/m2
 barleycorn		1|3 in
-barn			1-28 m2
+/barn			1-28 m2
 barrel			42 gal
 barye			1-1 nt/m2
 bev			1+9 e-volt
@@ -312,7 +317,7 @@ crith			9.06-2 gm
 cubit			18 in
 cup			1|2 pt
 curie			3.7+10 /sec
-dalton			amu
+/dalton			amu
 decade			10 yr
 dipotre			/m
 displacementton		35 ft3
@@ -481,4 +486,4 @@ water			.22491|2.54 kg/m2-sec2
 wey			40 bu
 weymass			252 lb
 Xunit			1.00202-13m
-k			1.38047-16 erg/degC
+/k			1.38047-16 erg/degC

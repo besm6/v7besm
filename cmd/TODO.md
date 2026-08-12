@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C17 and C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C18 and C26
 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C18 | `units` | | small |
 | C19 | `crypt`, `makekey` | | small |
 | C20 | `update` | one of the two [../etc/rc](../etc/rc) lines | trivial |
 | C21 | `at`, `atrun` | | medium, blocked on a clock |
@@ -53,7 +52,17 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C18**, and every grammar is done: C17 put `/bin/awk` on the image, the one
+**Where to start: C19.** C18 put `/bin/units` on the image and, with it, the first floating-point
+program this port has had — which is how it was discovered that **an arithmetic fault stopped the
+machine**: `kernel/trap.c` decoded five ГРП causes and neither of the two arithmetic ones, so a
+floating overflow or divide by zero in any user program reached `panic("trap")`. It decodes seven
+now, both new ones as `SIGFPE`, asserted by `kernel/test/ufpe` — the only forge test that links
+the real `trap.c` rather than a copy of it. **The rule that came out of it, and that every future
+port doing arithmetic inherits**: an overflow here is a fault and not a signal, so a range gate
+goes *before* the operation ([units/README.md](units/README.md),
+[../lib/libm/README.md](../lib/libm/README.md)). Underflow is a silent zero and raises nothing.
+
+**Every grammar is done**, too: C17 put `/bin/awk` on the image, the one
 program that is a yacc grammar *and* a lex scanner, and with it C10 is spent to the last risk.
 `b6yacc` and `b6lex` are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on
 the image with their skeletons (C10c, C10d). **C11, C26, C13, C14, C16 and C17 proved it** —
@@ -103,11 +112,6 @@ and that test is now **deleted** along with the rest of the tests that booted. S
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
 
 ---
-
-## C18. `units`
-
-`units/units.c`, 466 lines, and the `units/units` database staged as `/usr/lib/units` — a
-[../root.manifest](../root.manifest) stanza of its own beside the binary's.
 
 ## C19. `crypt` and `makekey`
 
